@@ -1,0 +1,110 @@
+{
+    "appKeys": {},
+    "capabilities": [
+        ""
+    ],
+    "companyName": "Maclyn B",
+    "longName": "Hexatransit",
+    "projectType": "native",
+    "resources": {
+        "media": [
+            {
+                "file": "images/F.png",
+                "name": "NUMBER_F",
+                "type": "png"
+            },
+            {
+                "file": "images/switch.png",
+                "name": "SWITCH",
+                "type": "png"
+            },
+            {
+                "file": "images/display_back.png",
+                "name": "BACKDROP",
+                "type": "png"
+            },
+            {
+                "file": "images/E.png",
+                "name": "NUMBER_E",
+                "type": "png"
+            },
+            {
+                "file": "images/D.png",
+                "name": "NUMBER_D",
+                "type": "png"
+            },
+            {
+                "file": "images/C.png",
+                "name": "NUMBER_C",
+                "type": "png"
+            },
+            {
+                "file": "images/B.png",
+                "name": "NUMBER_B",
+                "type": "png"
+            },
+            {
+                "file": "images/A.png",
+                "name": "NUMBER_A",
+                "type": "png"
+            },
+            {
+                "file": "images/9.png",
+                "name": "NUMBER_9",
+                "type": "png"
+            },
+            {
+                "file": "images/8.png",
+                "name": "NUMBER_8",
+                "type": "png"
+            },
+            {
+                "file": "images/7.png",
+                "name": "NUMBER_7",
+                "type": "png"
+            },
+            {
+                "file": "images/6.png",
+                "name": "NUMBER_6",
+                "type": "png"
+            },
+            {
+                "file": "images/5.png",
+                "name": "NUMBER_5",
+                "type": "png"
+            },
+            {
+                "file": "images/4.png",
+                "name": "NUMBER_4",
+                "type": "png"
+            },
+            {
+                "file": "images/3.png",
+                "name": "NUMBER_3",
+                "type": "png"
+            },
+            {
+                "file": "images/2.png",
+                "name": "NUMBER_2",
+                "type": "png"
+            },
+            {
+                "file": "images/1.png",
+                "name": "NUMBER_1",
+                "type": "png"
+            },
+            {
+                "file": "images/0.png",
+                "name": "NUMBER_0",
+                "type": "png"
+            }
+        ]
+    },
+    "shortName": "Hexatransit",
+    "uuid": "2e958d67-dbc3-430e-952e-d07890236352",
+    "versionCode": 1,
+    "versionLabel": "1.0",
+    "watchapp": {
+        "watchface": true
+    }
+}
