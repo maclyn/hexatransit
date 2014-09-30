@@ -2,23 +2,23 @@
 
 static Window *window;
 static Layer *layer;
-static TextLayer *date_layer;
-static GBitmap *backdrop;
-static GBitmap *slider;
 static GBitmap *numbers[16];
+static GBitmap *small_numbers[16];
 
 int is_charging;
 int battery_percent = 0;
 int hours = 0;
 int minutes = 0;
 int seconds = 0;
-char date_string[50] = "DOW, Month DOM";
+int month = 0;
+int day_of_month = 0;
+int day_of_week = 0;
 
 static void smear_location(GContext* ctx, int x, int y, int pixels){
   graphics_context_set_stroke_color(ctx, GColorWhite);
   while(pixels > 0){
-    int x_smear = rand() % 20;
-    int y_smear = rand() % 28;
+    int x_smear = rand() % 30;
+    int y_smear = rand() % 45;
     graphics_draw_pixel(ctx, GPoint(x + x_smear, y + y_smear));
     pixels--;
   }
@@ -27,65 +27,90 @@ static void smear_location(GContext* ctx, int x, int y, int pixels){
 
 static void draw_hex(int value, GContext* ctx, int x, int y){
   graphics_draw_bitmap_in_rect(ctx, numbers[value],
-     (GRect) { .origin = { x, y }, .size = { 20, 28 } });
+     (GRect) { .origin = { x, y }, .size = { 30, 45 } });
+}
+
+static void draw_small_hex(int value, GContext* ctx, int x, int y){
+  graphics_draw_bitmap_in_rect(ctx, small_numbers[value],
+     (GRect) { .origin = { x, y }, .size = { 12, 18 } });
 }
 
 static void layer_update_callback(Layer *me, GContext* ctx) {
-  //Draw the backdrop
-  graphics_draw_bitmap_in_rect(ctx, backdrop, (GRect) { .origin = { 0, 0 }, .size = { 144, 168 } });
-  
   //Draw the hours in hex
   int hour_value = hours;
   if(hour_value > 11){
     hour_value -= 12;
   }
-  int hour_x_position = 1 + (int)((((float)hours) / (23.0f)) * 122.0f);
-  draw_hex(hour_value, ctx, hour_x_position, 13); 
+  int hour_x_position = 2 + (int)((((float)hours) / (23.0f)) * 110.0f);
+  draw_hex(hour_value, ctx, hour_x_position, 2); 
   
   //If there's room to left, "smear" the hex value to the left by randomly painting white
   //pixels over it
   int hour_smear_count = 0;
-  hour_x_position -= 23;
-  while(hour_x_position > -23){
+  hour_x_position -= 36;
+  while(hour_x_position > -32){
     hour_smear_count++;
-    draw_hex(hour_value, ctx, hour_x_position, 13); 
+    draw_hex(hour_value, ctx, hour_x_position, 2); 
     //"Smear" the location by drawing random white pixels 20 x count times over the image
-    smear_location(ctx, hour_x_position, 13, 100 * hour_smear_count);
-    hour_x_position -= 23;
+    smear_location(ctx, hour_x_position, 2, 300 * hour_smear_count);
+    hour_x_position -= 32;
   }
   
   //Draw the minutes in hex
   int first_hex_digit = minutes / 16;
   int second_hex_digit = minutes % 16;
-  int min_x_position = 1 + (int)((((float)minutes) / (60.0f)) * 100.0f);
-  draw_hex(first_hex_digit, ctx, min_x_position, 81); 
-  draw_hex(second_hex_digit, ctx, min_x_position + 23, 81); 
+  int min_x_position = 2 + (int)((((float)minutes) / (60.0f)) * 78.0f);
+  draw_hex(first_hex_digit, ctx, min_x_position, 49); 
+  draw_hex(second_hex_digit, ctx, min_x_position + 32, 49); 
   
   //If there's room to left, "smear" the hex value to the left by randomly painting white
   //pixels over it
   int min_smear_count = 0;
-  min_x_position -= 46;
-  while(min_x_position > -46){
+  min_x_position -= 68;
+  while(min_x_position > -64){
     min_smear_count++;
-    draw_hex(first_hex_digit, ctx, min_x_position, 81); 
-    draw_hex(second_hex_digit, ctx, min_x_position + 23, 81); 
+    draw_hex(first_hex_digit, ctx, min_x_position, 49); 
+    draw_hex(second_hex_digit, ctx, min_x_position + 32, 49); 
     //"Smear" the location by drawing random white pixels 20 x count times over the image
-    smear_location(ctx, min_x_position, 81, 100 * min_smear_count);
-    smear_location(ctx, min_x_position + 23, 81, 100 * min_smear_count);
-    min_x_position -= 46;
+    smear_location(ctx, min_x_position, 49, 300 * min_smear_count);
+    smear_location(ctx, min_x_position + 32, 49, 300 * min_smear_count);
+    min_x_position -= 64;
   }
   
   //Draw the seconds with lines
-  int x_pos = 12;
+  int x_pos = 2;
   while(seconds > 0){
-    graphics_draw_line(ctx, GPoint(x_pos, 116), GPoint(x_pos, 123));
+    graphics_draw_line(ctx, GPoint(x_pos, 97), GPoint(x_pos, 105));
     x_pos += 2;
     seconds--;
   }
   
-  //Draw the battery status
-  int y_position = 47 + (int)((((float)battery_percent) / (100.0f)) * 22.0f);
-  graphics_draw_bitmap_in_rect(ctx, slider, (GRect) { .origin = { 125, y_position}, .size = {18, 6}});
+  //Draw divider between seconds/battery
+  graphics_fill_rect(ctx, (GRect) { .origin = { 123, 100 }, .size = { 3, 3 } }, 0, GCornerNone);
+  
+  //Draw battery with lines
+  int battery_lines = (int)((((float)battery_percent) / (100.0f)) * 7.0f);
+  int battery_x_pos = 128;
+  while(battery_lines > 0){
+    graphics_draw_line(ctx, GPoint(battery_x_pos, 99), GPoint(battery_x_pos, 103));
+    battery_x_pos += 2;
+    battery_lines--;
+  }
+  
+  //Draw day of week (0-7) (@ y = 107)
+  int dow_x_position = 2 + (int)((((float)day_of_week) / (6.0f)) * 128.0f);
+  draw_small_hex(day_of_week+1, ctx, dow_x_position, 107); 
+  
+  //Draw day of month (0-31) (@ y = 127)
+  int dom_hex_1_val = day_of_month / 16;
+  int dom_hex_2_val = day_of_month % 16;
+  int dom_x_position = 2 + (int)((((float)day_of_month-1) / (30.0f)) * 114.0f);
+  draw_small_hex(dom_hex_1_val, ctx, dom_x_position, 127); 
+  draw_small_hex(dom_hex_2_val, ctx, dom_x_position + 14, 127); 
+  
+  //Draw month (0-11) (@ y = 147)
+  int m_x_position = 2 + (int)((((float)month) / (11.0f)) * 128.0f);
+  draw_small_hex(month+1, ctx, m_x_position, 147); 
 }
 
 static void handle_battery(BatteryChargeState charge_state) {
@@ -94,13 +119,15 @@ static void handle_battery(BatteryChargeState charge_state) {
 }
 
 static void handle_second_tick(struct tm* tick_time, TimeUnits units_changed) {
-  strftime(date_string, sizeof(date_string), "%A, %B %d", tick_time);
-  text_layer_set_text(date_layer, date_string);
   handle_battery(battery_state_service_peek());
   
   seconds = tick_time->tm_sec;
   minutes = tick_time->tm_min;
   hours = tick_time->tm_hour;
+  month = tick_time->tm_mon;
+  day_of_month = tick_time->tm_mday;
+  day_of_week = tick_time->tm_wday;
+  
   layer_mark_dirty(layer);
 }
 
@@ -115,18 +142,8 @@ void init(){
   layer = layer_create(bounds);
   layer_set_update_proc(layer, layer_update_callback);
   
-  date_layer = text_layer_create(GRect(2, 128, 140, 40));
-  text_layer_set_text_color(date_layer, GColorBlack);
-  text_layer_set_background_color(date_layer, GColorClear);
-  text_layer_set_font(date_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
-  text_layer_set_text_alignment(date_layer, GTextAlignmentLeft);
-  text_layer_set_overflow_mode(date_layer, GTextOverflowModeWordWrap);
-  
   layer_add_child(window_layer, layer);
-  layer_add_child(window_layer, text_layer_get_layer(date_layer));
   
-  backdrop = gbitmap_create_with_resource(RESOURCE_ID_BACKDROP);
-  slider = gbitmap_create_with_resource(RESOURCE_ID_SWITCH);
   numbers[0] = gbitmap_create_with_resource(RESOURCE_ID_NUMBER_0);
   numbers[1] = gbitmap_create_with_resource(RESOURCE_ID_NUMBER_1);
   numbers[2] = gbitmap_create_with_resource(RESOURCE_ID_NUMBER_2);
@@ -143,6 +160,22 @@ void init(){
   numbers[13] = gbitmap_create_with_resource(RESOURCE_ID_NUMBER_D);
   numbers[14] = gbitmap_create_with_resource(RESOURCE_ID_NUMBER_E);
   numbers[15] = gbitmap_create_with_resource(RESOURCE_ID_NUMBER_F);
+  small_numbers[0] = gbitmap_create_with_resource(RESOURCE_ID_SMALL_NUMBER_0);
+  small_numbers[1] = gbitmap_create_with_resource(RESOURCE_ID_SMALL_NUMBER_1);
+  small_numbers[2] = gbitmap_create_with_resource(RESOURCE_ID_SMALL_NUMBER_2);
+  small_numbers[3] = gbitmap_create_with_resource(RESOURCE_ID_SMALL_NUMBER_3);
+  small_numbers[4] = gbitmap_create_with_resource(RESOURCE_ID_SMALL_NUMBER_4);
+  small_numbers[5] = gbitmap_create_with_resource(RESOURCE_ID_SMALL_NUMBER_5);
+  small_numbers[6] = gbitmap_create_with_resource(RESOURCE_ID_SMALL_NUMBER_6);
+  small_numbers[7] = gbitmap_create_with_resource(RESOURCE_ID_SMALL_NUMBER_7);
+  small_numbers[8] = gbitmap_create_with_resource(RESOURCE_ID_SMALL_NUMBER_8);
+  small_numbers[9] = gbitmap_create_with_resource(RESOURCE_ID_SMALL_NUMBER_9);
+  small_numbers[10] = gbitmap_create_with_resource(RESOURCE_ID_SMALL_NUMBER_A);
+  small_numbers[11] = gbitmap_create_with_resource(RESOURCE_ID_SMALL_NUMBER_B);
+  small_numbers[12] = gbitmap_create_with_resource(RESOURCE_ID_SMALL_NUMBER_C);
+  small_numbers[13] = gbitmap_create_with_resource(RESOURCE_ID_SMALL_NUMBER_D);
+  small_numbers[14] = gbitmap_create_with_resource(RESOURCE_ID_SMALL_NUMBER_E);
+  small_numbers[15] = gbitmap_create_with_resource(RESOURCE_ID_SMALL_NUMBER_F);
   
   srand(time(NULL));
   
@@ -154,15 +187,13 @@ void deinit(){
   tick_timer_service_unsubscribe();
   battery_state_service_unsubscribe();
   
-  gbitmap_destroy(backdrop);
-  gbitmap_destroy(slider);
   int i;
   for(i = 0; i < 15; i++){
     gbitmap_destroy(numbers[i]);
+    gbitmap_destroy(small_numbers[i]);
   }
   window_destroy(window);
   layer_destroy(layer);
-  text_layer_destroy(date_layer);
 }
 
 int main(void) {

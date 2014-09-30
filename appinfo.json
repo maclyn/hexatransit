@@ -9,18 +9,88 @@
     "resources": {
         "media": [
             {
+                "file": "images/SMALL_F.png",
+                "name": "SMALL_NUMBER_F",
+                "type": "png"
+            },
+            {
+                "file": "images/SMALL_E.png",
+                "name": "SMALL_NUMBER_E",
+                "type": "png"
+            },
+            {
+                "file": "images/SMALL_D.png",
+                "name": "SMALL_NUMBER_D",
+                "type": "png"
+            },
+            {
+                "file": "images/SMALL_C.png",
+                "name": "SMALL_NUMBER_C",
+                "type": "png"
+            },
+            {
+                "file": "images/SMALL_B.png",
+                "name": "SMALL_NUMBER_B",
+                "type": "png"
+            },
+            {
+                "file": "images/SMALL_A.png",
+                "name": "SMALL_NUMBER_A",
+                "type": "png"
+            },
+            {
+                "file": "images/SMALL_8.png",
+                "name": "SMALL_NUMBER_8",
+                "type": "png"
+            },
+            {
+                "file": "images/SMALL_9.png",
+                "name": "SMALL_NUMBER_9",
+                "type": "png"
+            },
+            {
+                "file": "images/SMALL_7.png",
+                "name": "SMALL_NUMBER_7",
+                "type": "png"
+            },
+            {
+                "file": "images/SMALL_6.png",
+                "name": "SMALL_NUMBER_6",
+                "type": "png"
+            },
+            {
+                "file": "images/SMALL_5.png",
+                "name": "SMALL_NUMBER_5",
+                "type": "png"
+            },
+            {
+                "file": "images/SMALL_4.png",
+                "name": "SMALL_NUMBER_4",
+                "type": "png"
+            },
+            {
+                "file": "images/SMALL_3.png",
+                "name": "SMALL_NUMBER_3",
+                "type": "png"
+            },
+            {
+                "file": "images/SMALL_2.png",
+                "name": "SMALL_NUMBER_2",
+                "type": "png"
+            },
+            {
+                "file": "images/SMALL_1.png",
+                "name": "SMALL_NUMBER_1",
+                "type": "png"
+            },
+            {
+                "file": "images/SMALL_0.png",
+                "name": "SMALL_NUMBER_0",
+                "type": "png"
+            },
+            {
                 "file": "images/F.png",
                 "name": "NUMBER_F",
-                "type": "png"
-            },
-            {
-                "file": "images/switch.png",
-                "name": "SWITCH",
-                "type": "png"
-            },
-            {
-                "file": "images/display_back.png",
-                "name": "BACKDROP",
                 "type": "png"
             },
             {
