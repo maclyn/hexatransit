@@ -188,7 +188,7 @@ void deinit(){
   battery_state_service_unsubscribe();
   
   int i;
-  for(i = 0; i < 15; i++){
+  for(i = 0; i < 16; i++){
     gbitmap_destroy(numbers[i]);
     gbitmap_destroy(small_numbers[i]);
   }
