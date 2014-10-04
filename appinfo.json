@@ -9,6 +9,11 @@
     "resources": {
         "media": [
             {
+                "file": "images/charging_icon_low.png",
+                "name": "CHARGING_ICON_LOW",
+                "type": "png"
+            },
+            {
                 "file": "images/charging_icon.png",
                 "name": "CHARGING_ICON",
                 "type": "png"
