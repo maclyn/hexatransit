@@ -9,6 +9,11 @@
     "resources": {
         "media": [
             {
+                "file": "images/charging_icon.png",
+                "name": "CHARGING_ICON",
+                "type": "png"
+            },
+            {
                 "file": "images/SMALL_F.png",
                 "name": "SMALL_NUMBER_F",
                 "type": "png"

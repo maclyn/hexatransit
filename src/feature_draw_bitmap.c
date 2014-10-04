@@ -4,6 +4,7 @@ static Window *window;
 static Layer *layer;
 static GBitmap *numbers[16];
 static GBitmap *small_numbers[16];
+static GBitmap *charging_icon;
 
 int is_charging;
 int battery_percent = 0;
@@ -89,12 +90,17 @@ static void layer_update_callback(Layer *me, GContext* ctx) {
   graphics_fill_rect(ctx, (GRect) { .origin = { 123, 100 }, .size = { 3, 3 } }, 0, GCornerNone);
   
   //Draw battery with lines
-  int battery_lines = (int)((((float)battery_percent) / (100.0f)) * 7.0f);
-  int battery_x_pos = 128;
-  while(battery_lines > 0){
-    graphics_draw_line(ctx, GPoint(battery_x_pos, 99), GPoint(battery_x_pos, 103));
-    battery_x_pos += 2;
-    battery_lines--;
+  if(!is_charging){
+    int battery_lines = (int)((((float)battery_percent) / (100.0f)) * 7.0f);
+    int battery_x_pos = 128;
+    while(battery_lines > 0){
+      graphics_draw_line(ctx, GPoint(battery_x_pos, 99), GPoint(battery_x_pos, 103));
+      battery_x_pos += 2;
+      battery_lines--;
+    }
+  } else { //Draw charging image
+    graphics_draw_bitmap_in_rect(ctx, charging_icon,
+     (GRect) { .origin = { 128, 99 }, .size = { 14, 5 } });
   }
   
   //Draw day of week (0-7) (@ y = 107)
@@ -176,9 +182,9 @@ void init(){
   small_numbers[13] = gbitmap_create_with_resource(RESOURCE_ID_SMALL_NUMBER_D);
   small_numbers[14] = gbitmap_create_with_resource(RESOURCE_ID_SMALL_NUMBER_E);
   small_numbers[15] = gbitmap_create_with_resource(RESOURCE_ID_SMALL_NUMBER_F);
+  charging_icon = gbitmap_create_with_resource(RESOURCE_ID_CHARGING_ICON);
   
   srand(time(NULL));
-  
   tick_timer_service_subscribe(SECOND_UNIT, &handle_second_tick);
   battery_state_service_subscribe(&handle_battery);
 }
@@ -192,6 +198,8 @@ void deinit(){
     gbitmap_destroy(numbers[i]);
     gbitmap_destroy(small_numbers[i]);
   }
+  gbitmap_destroy(charging_icon);
+  
   window_destroy(window);
   layer_destroy(layer);
 }
