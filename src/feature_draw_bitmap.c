@@ -1,20 +1,30 @@
+//Main watchface code. The settings code was adapted from the Simplicity2 watchface by
+//Matthew Clark.
 #include "pebble.h"
 
 static Window *window;
 static Layer *layer;
+
+int is_charging = 0;
+bool is_connected = true;
+int battery_percent = 0;
 static GBitmap *numbers[16];
 static GBitmap *small_numbers[16];
 static GBitmap *charging_icon;
 static GBitmap *charging_icon_low;
 
-int is_charging;
-int battery_percent = 0;
-int hours = 0;
-int minutes = 0;
-int seconds = 0;
-int month = 0;
-int day_of_month = 0;
-int day_of_week = 0;
+static AppSync sync;
+static uint8_t buffer[256];
+enum Settings { setting_power = 1, setting_vibrate };
+static enum SettingPower { high_power = 0, low_power } power;
+static enum SettingVibrate { vibrate_off = 0, vibrate_on } vibrate;
+int lowpower_enabled = false;
+int vibrate_enabled = false;
+
+struct tm* curr_time = NULL;
+
+static void app_error_callback(DictionaryResult dict_error, AppMessageResult app_message_error, void* context) {
+}
 
 static void smear_location(GContext* ctx, int x, int y, int pixels){
   graphics_context_set_stroke_color(ctx, GColorWhite);
@@ -38,6 +48,19 @@ static void draw_small_hex(int value, GContext* ctx, int x, int y){
 }
 
 static void layer_update_callback(Layer *me, GContext* ctx) {
+  if(curr_time == NULL){
+    time_t in_time_units;
+    time(&in_time_units);
+    curr_time = localtime(&in_time_units);
+  }
+  
+  int hours = curr_time->tm_hour;
+  int minutes = curr_time->tm_min;
+  int seconds = curr_time->tm_sec;
+  int month = curr_time->tm_mon;
+  int day_of_month = curr_time->tm_mday;
+  int day_of_week = curr_time->tm_wday;
+  
   //Draw the hours in hex
   int hour_value = hours;
   if(hour_value > 11){
@@ -88,8 +111,8 @@ static void layer_update_callback(Layer *me, GContext* ctx) {
     seconds_dup--;
   }
   
-  //Draw divider between seconds/battery
-  graphics_fill_rect(ctx, (GRect) { .origin = { 123, 100 }, .size = { 3, 3 } }, 0, GCornerNone);
+  //Draw divider between seconds/battery (only if connected)
+  if(is_connected) graphics_fill_rect(ctx, (GRect) { .origin = { 123, 100 }, .size = { 3, 3 } }, 0, GCornerNone);
   
   //Draw battery with lines
   if(!is_charging){
@@ -126,22 +149,38 @@ static void layer_update_callback(Layer *me, GContext* ctx) {
   draw_small_hex(month+1, ctx, m_x_position, 147); 
 }
 
+static void tuple_changed_callback(const uint32_t key, const Tuple* tuple_new, const Tuple* tuple_old, void* context) {
+  int value = tuple_new->value->uint8;
+  switch (key) {
+    case setting_power:
+      if ((value >= 0) && (value < 2)){
+        lowpower_enabled = value;
+      }
+      break;
+    case setting_vibrate:
+      if ((value >= 0) && (value < 2)){
+        vibrate_enabled = value;
+      }
+    break;
+  }
+}
+
+static void handle_bluetooth(bool connected) {
+  is_connected = connected;
+  if(vibrate_enabled) vibes_long_pulse();
+}
+
 static void handle_battery(BatteryChargeState charge_state) {
   is_charging = charge_state.is_charging;
   battery_percent = charge_state.charge_percent;
 }
 
 static void handle_second_tick(struct tm* tick_time, TimeUnits units_changed) {
-  handle_battery(battery_state_service_peek());
+  curr_time = tick_time;
   
-  seconds = tick_time->tm_sec;
-  minutes = tick_time->tm_min;
-  hours = tick_time->tm_hour;
-  month = tick_time->tm_mon;
-  day_of_month = tick_time->tm_mday;
-  day_of_week = tick_time->tm_wday;
-  
-  layer_mark_dirty(layer);
+  if(!lowpower_enabled || curr_time->tm_sec % 15 == 0){
+    layer_mark_dirty(layer);
+  }
 }
 
 void init(){
@@ -151,12 +190,9 @@ void init(){
   // Init the layer for display the image
   Layer *window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_frame(window_layer);
-  
   layer = layer_create(bounds);
   layer_set_update_proc(layer, layer_update_callback);
-  
   layer_add_child(window_layer, layer);
-  
   numbers[0] = gbitmap_create_with_resource(RESOURCE_ID_NUMBER_0);
   numbers[1] = gbitmap_create_with_resource(RESOURCE_ID_NUMBER_1);
   numbers[2] = gbitmap_create_with_resource(RESOURCE_ID_NUMBER_2);
@@ -193,13 +229,28 @@ void init(){
   charging_icon_low = gbitmap_create_with_resource(RESOURCE_ID_CHARGING_ICON_LOW);
   
   srand(time(NULL));
+  
   tick_timer_service_subscribe(SECOND_UNIT, &handle_second_tick);
   battery_state_service_subscribe(&handle_battery);
+  bluetooth_connection_service_subscribe(&handle_bluetooth);
+  handle_bluetooth(bluetooth_connection_service_peek());
+  handle_battery(battery_state_service_peek());
+  
+  Tuplet tuples[] = {
+    TupletInteger(setting_power, power),
+    TupletInteger(setting_vibrate, vibrate)
+  };
+  app_message_open(160, 160);
+  app_sync_init(&sync, buffer, sizeof(buffer), tuples, ARRAY_LENGTH(tuples), tuple_changed_callback, app_error_callback, NULL);
+  layer_mark_dirty(layer);
 }
 
 void deinit(){
+  app_sync_deinit(&sync);
+  
   tick_timer_service_unsubscribe();
   battery_state_service_unsubscribe();
+  bluetooth_connection_service_unsubscribe();
   
   int i;
   for(i = 0; i < 16; i++){

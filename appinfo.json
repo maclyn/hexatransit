@@ -1,13 +1,22 @@
 {
-    "appKeys": {},
+    "appKeys": {
+        "lowpower": 1,
+        "vibrate": 2
+    },
     "capabilities": [
-        ""
+        "configurable"
     ],
     "companyName": "Maclyn B",
-    "longName": "Hexatransit",
+    "longName": "HexaTransit",
     "projectType": "native",
     "resources": {
         "media": [
+            {
+                "file": "images/menuimg.png",
+                "menuIcon": true,
+                "name": "MENU_IMAGE",
+                "type": "png"
+            },
             {
                 "file": "images/charging_icon_low.png",
                 "name": "CHARGING_ICON_LOW",
@@ -180,10 +189,10 @@
             }
         ]
     },
-    "shortName": "Hexatransit",
+    "shortName": "HexaTransit",
     "uuid": "2e958d67-dbc3-430e-952e-d07890236352",
     "versionCode": 1,
-    "versionLabel": "1.0",
+    "versionLabel": "1.1",
     "watchapp": {
         "watchface": true
     }
