@@ -15,11 +15,19 @@ static GBitmap *charging_icon_low;
 
 static AppSync sync;
 static uint8_t buffer[256];
-enum Settings { setting_power = 1, setting_vibrate };
+enum Settings { setting_power = 1, setting_vibrate, setting_ghost, setting_hourly };
 static enum SettingPower { high_power = 0, low_power } power;
 static enum SettingVibrate { vibrate_off = 0, vibrate_on } vibrate;
+static enum SettingGhost { ghost_off = 0, ghost_on } ghost;
+static enum SettingHourly { hourly_off = 0, hourly_on } hourly;
 int lowpower_enabled = false;
-int vibrate_enabled = false;
+int vibrate_enabled = true;
+int ghost_enabled = true;
+int hourly_enabled = true;
+int LOW_POWER_KEY = 1;
+int VIBRATE_KEY = 2;
+int GHOST_KEY = 3;
+int HOURLY_KEY = 4;
 
 struct tm* curr_time = NULL;
 
@@ -61,6 +69,10 @@ static void layer_update_callback(Layer *me, GContext* ctx) {
   int day_of_month = curr_time->tm_mday;
   int day_of_week = curr_time->tm_wday;
   
+  if(hourly_enabled && minutes == 0 && seconds == 0){
+    vibes_long_pulse();
+  }
+  
   //Draw the hours in hex
   int hour_value = hours;
   if(hour_value > 11){
@@ -73,7 +85,7 @@ static void layer_update_callback(Layer *me, GContext* ctx) {
   //pixels over it
   int hour_smear_count = 0;
   hour_x_position -= 36;
-  while(hour_x_position > -32){
+  while(hour_x_position > -32 && ghost_enabled){
     hour_smear_count++;
     draw_hex(hour_value, ctx, hour_x_position, 2); 
     //"Smear" the location by drawing random white pixels 20 x count times over the image
@@ -92,7 +104,7 @@ static void layer_update_callback(Layer *me, GContext* ctx) {
   //pixels over it
   int min_smear_count = 0;
   min_x_position -= 68;
-  while(min_x_position > -64){
+  while(min_x_position > -64 && ghost_enabled){
     min_smear_count++;
     draw_hex(first_hex_digit, ctx, min_x_position, 49); 
     draw_hex(second_hex_digit, ctx, min_x_position + 32, 49); 
@@ -155,13 +167,27 @@ static void tuple_changed_callback(const uint32_t key, const Tuple* tuple_new, c
     case setting_power:
       if ((value >= 0) && (value < 2)){
         lowpower_enabled = value;
+        persist_write_bool(LOW_POWER_KEY, value);
       }
       break;
     case setting_vibrate:
       if ((value >= 0) && (value < 2)){
         vibrate_enabled = value;
+        persist_write_bool(VIBRATE_KEY, value);
       }
-    break;
+      break;
+    case setting_ghost:
+      if ((value >= 0) && (value < 2)){
+        ghost_enabled = value;
+        persist_write_bool(GHOST_KEY, value);
+      }
+      break;
+    case setting_hourly:
+      if ((value >= 0) && (value < 2)){
+        hourly_enabled = value;
+        persist_write_bool(HOURLY_KEY, value);
+      }
+      break;
   }
 }
 
@@ -186,6 +212,19 @@ static void handle_second_tick(struct tm* tick_time, TimeUnits units_changed) {
 void init(){
   window = window_create();
   window_stack_push(window, true);
+  
+  if(persist_exists(VIBRATE_KEY)){
+    vibrate_enabled = persist_read_bool(VIBRATE_KEY);
+  }
+  if(persist_exists(LOW_POWER_KEY)){
+    lowpower_enabled = persist_read_bool(LOW_POWER_KEY);
+  }
+  if(persist_exists(GHOST_KEY)){
+    ghost_enabled = persist_read_bool(GHOST_KEY);
+  }
+  if(persist_exists(HOURLY_KEY)){
+    hourly_enabled = persist_read_bool(HOURLY_KEY);
+  }
 
   // Init the layer for display the image
   Layer *window_layer = window_get_root_layer(window);
@@ -238,7 +277,9 @@ void init(){
   
   Tuplet tuples[] = {
     TupletInteger(setting_power, power),
-    TupletInteger(setting_vibrate, vibrate)
+    TupletInteger(setting_vibrate, vibrate),
+    TupletInteger(setting_ghost, ghost),
+    TupletInteger(setting_hourly, hourly)
   };
   app_message_open(160, 160);
   app_sync_init(&sync, buffer, sizeof(buffer), tuples, ARRAY_LENGTH(tuples), tuple_changed_callback, app_error_callback, NULL);
