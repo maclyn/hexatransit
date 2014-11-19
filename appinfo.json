@@ -1,12 +1,9 @@
 {
-    "appKeys": {
-        "lowpower": 1,
-        "vibrate": 2
-    },
+    "appKeys": {},
     "capabilities": [
         "configurable"
     ],
-    "companyName": "Maclyn B",
+    "companyName": "IniPage Software",
     "longName": "HexaTransit",
     "projectType": "native",
     "resources": {
@@ -192,7 +189,7 @@
     "shortName": "HexaTransit",
     "uuid": "2e958d67-dbc3-430e-952e-d07890236352",
     "versionCode": 1,
-    "versionLabel": "1.1",
+    "versionLabel": "1.2",
     "watchapp": {
         "watchface": true
     }

@@ -15,44 +15,88 @@ static GBitmap *charging_icon_low;
 
 static AppSync sync;
 static uint8_t buffer[256];
-enum Settings { setting_power = 1, setting_vibrate, setting_ghost, setting_hourly };
+enum Settings { setting_power = 1, setting_vibrate, setting_ghost, setting_hourly, setting_extra };
 static enum SettingPower { high_power = 0, low_power } power;
 static enum SettingVibrate { vibrate_off = 0, vibrate_on } vibrate;
 static enum SettingGhost { ghost_off = 0, ghost_on } ghost;
 static enum SettingHourly { hourly_off = 0, hourly_on } hourly;
-int lowpower_enabled = false;
-int vibrate_enabled = true;
-int ghost_enabled = true;
-int hourly_enabled = true;
+static enum SettingExtra { extra_off = 0, extra_on} extra;
+bool lowpower_enabled;
+bool vibrate_enabled;
+bool ghost_enabled;
+bool hourly_enabled;
+bool extra_enabled;
 int LOW_POWER_KEY = 1;
 int VIBRATE_KEY = 2;
 int GHOST_KEY = 3;
 int HOURLY_KEY = 4;
+int EXTRA_KEY = 5;
+
+long time_running = 0l;
 
 struct tm* curr_time = NULL;
 
 static void app_error_callback(DictionaryResult dict_error, AppMessageResult app_message_error, void* context) {
 }
 
-static void smear_location(GContext* ctx, int x, int y, int pixels){
+static void draw_hex(int value, bool is_small, GContext* ctx, int x, int y, int w, int h){
+  if(is_small)
+    graphics_draw_bitmap_in_rect(ctx, small_numbers[value],
+       (GRect) { .origin = { x, y }, .size = { w, h } });
+  else 
+    graphics_draw_bitmap_in_rect(ctx, numbers[value],
+       (GRect) { .origin = { x, y }, .size = { w, h } });
+}
+
+static void draw_hex_small(GContext* ctx, int value, int x, int y){
+  draw_hex(value, true, ctx, x, y, 12, 18);
+}
+
+static void draw_hex_big(GContext* ctx, int value, int x, int y){
+  draw_hex(value, false, ctx, x, y, 30, 45);
+}
+
+static void smear_location_internal(GContext* ctx, int x, int y, int pixels, int w, int h){
   graphics_context_set_stroke_color(ctx, GColorWhite);
   while(pixels > 0){
-    int x_smear = rand() % 30;
-    int y_smear = rand() % 45;
+    int x_smear = rand() % w;
+    int y_smear = rand() % h;
     graphics_draw_pixel(ctx, GPoint(x + x_smear, y + y_smear));
     pixels--;
   }
   graphics_context_set_stroke_color(ctx, GColorBlack);
 }
 
-static void draw_hex(int value, GContext* ctx, int x, int y){
-  graphics_draw_bitmap_in_rect(ctx, numbers[value],
-     (GRect) { .origin = { x, y }, .size = { 30, 45 } });
+static void smear_location(int digit, GContext* ctx, int x, 
+                           int y, int w, int h, int pixels, int spacing, bool is_small){
+  if((!ghost_enabled && !is_small) || (!extra_enabled && is_small)) return;
+  x -= (w + spacing);
+  int smear_count = 1;
+  while(x > -(w + spacing)){
+    draw_hex(digit, is_small, ctx, x, y, w, h); 
+    //"Smear" the location by drawing random white pixels 20 x count times over the image
+    smear_location_internal(ctx, x, y, pixels * smear_count, w, h);
+    smear_count++;
+    x -= (w + spacing);
+  }
 }
 
-static void draw_small_hex(int value, GContext* ctx, int x, int y){
-  graphics_draw_bitmap_in_rect(ctx, small_numbers[value],
-     (GRect) { .origin = { x, y }, .size = { 12, 18 } });
+//Smear location for elements two digits wide
+static void smear_location_two_wide(int digit1, int digit2, GContext* ctx, 
+                                  int x, int y, int w, int h, int spacing, int pixels, 
+                                  bool is_small){
+  if((!ghost_enabled && !is_small) || (!extra_enabled && is_small)) return;
+  x -= ((w + spacing) * 2);
+  int smear_count = 1;
+  while(x > (-2 * (w + spacing))){
+    draw_hex(digit1, is_small, ctx, x, y, w, h); 
+    smear_location_internal(ctx, x, y, pixels * smear_count, w, h);
+    draw_hex(digit2, is_small, ctx, x + w + spacing, y, w, h); 
+    smear_location_internal(ctx, x + w + spacing, y, pixels * smear_count, w, h);
+    //One step forward
+    smear_count++;
+    x -= 2 * (w + spacing);
+  }
 }
 
 static void layer_update_callback(Layer *me, GContext* ctx) {
@@ -79,113 +123,94 @@ static void layer_update_callback(Layer *me, GContext* ctx) {
     hour_value -= 12;
   }
   int hour_x_position = 2 + (int)((((float)hours) / (23.0f)) * 110.0f);
-  draw_hex(hour_value, ctx, hour_x_position, 2); 
-  
-  //If there's room to left, "smear" the hex value to the left by randomly painting white
-  //pixels over it
-  int hour_smear_count = 0;
-  hour_x_position -= 36;
-  while(hour_x_position > -32 && ghost_enabled){
-    hour_smear_count++;
-    draw_hex(hour_value, ctx, hour_x_position, 2); 
-    //"Smear" the location by drawing random white pixels 20 x count times over the image
-    smear_location(ctx, hour_x_position, 2, 300 * hour_smear_count);
-    hour_x_position -= 32;
-  }
+  draw_hex_big(ctx, hour_value, hour_x_position, 2);
+  smear_location(hour_value, ctx, hour_x_position, 2, 30, 45, 200, 2, false);
   
   //Draw the minutes in hex
   int first_hex_digit = minutes / 16;
   int second_hex_digit = minutes % 16;
   int min_x_position = 2 + (int)((((float)minutes) / (60.0f)) * 78.0f);
-  draw_hex(first_hex_digit, ctx, min_x_position, 49); 
-  draw_hex(second_hex_digit, ctx, min_x_position + 32, 49); 
-  
-  //If there's room to left, "smear" the hex value to the left by randomly painting white
-  //pixels over it
-  int min_smear_count = 0;
-  min_x_position -= 68;
-  while(min_x_position > -64 && ghost_enabled){
-    min_smear_count++;
-    draw_hex(first_hex_digit, ctx, min_x_position, 49); 
-    draw_hex(second_hex_digit, ctx, min_x_position + 32, 49); 
-    //"Smear" the location by drawing random white pixels 20 x count times over the image
-    smear_location(ctx, min_x_position, 49, 300 * min_smear_count);
-    smear_location(ctx, min_x_position + 32, 49, 300 * min_smear_count);
-    min_x_position -= 64;
-  }
+  draw_hex_big(ctx, first_hex_digit, min_x_position, 49); 
+  draw_hex_big(ctx, second_hex_digit, min_x_position + 32, 49); 
+  smear_location_two_wide(first_hex_digit, second_hex_digit, ctx, min_x_position, 49, 30, 45, 2, 200, false);
   
   //Draw the seconds with lines
   int x_pos = 2;
   int seconds_dup = seconds;
   while(seconds_dup > 0){
-    graphics_draw_line(ctx, GPoint(x_pos, 97), GPoint(x_pos, 105));
+    graphics_draw_line(ctx, GPoint(x_pos, 96), GPoint(x_pos, 104));
     x_pos += 2;
     seconds_dup--;
   }
   
   //Draw divider between seconds/battery (only if connected)
-  if(is_connected) graphics_fill_rect(ctx, (GRect) { .origin = { 123, 100 }, .size = { 3, 3 } }, 0, GCornerNone);
+  if(is_connected) graphics_fill_rect(ctx, (GRect) { .origin = { 123, 99 }, .size = { 3, 3 } }, 0, GCornerNone);
   
   //Draw battery with lines
   if(!is_charging){
     int battery_lines = (int)((((float)battery_percent) / (100.0f)) * 7.0f);
     int battery_x_pos = 128;
     while(battery_lines > 0){
-      graphics_draw_line(ctx, GPoint(battery_x_pos, 99), GPoint(battery_x_pos, 103));
+      graphics_draw_line(ctx, GPoint(battery_x_pos, 98), GPoint(battery_x_pos, 102));
       battery_x_pos += 2;
       battery_lines--;
     }
   } else { //Draw charging image
     if(seconds % 2){
       graphics_draw_bitmap_in_rect(ctx, charging_icon_low,
-       (GRect) { .origin = { 128, 99 }, .size = { 14, 5 } });
+       (GRect) { .origin = { 128, 98 }, .size = { 14, 5 } });
     } else {
       graphics_draw_bitmap_in_rect(ctx, charging_icon,
-       (GRect) { .origin = { 128, 99 }, .size = { 14, 5 } });
+       (GRect) { .origin = { 128, 98 }, .size = { 14, 5 } });
     }
   }
   
   //Draw day of week (0-7) (@ y = 107)
   int dow_x_position = 2 + (int)((((float)day_of_week) / (6.0f)) * 128.0f);
-  draw_small_hex(day_of_week+1, ctx, dow_x_position, 107); 
+  draw_hex_small(ctx, day_of_week+1, dow_x_position, 107); 
+  smear_location(day_of_week+1, ctx, dow_x_position, 107, 12, 18, 40, 2, true);
   
   //Draw day of month (0-31) (@ y = 127)
   int dom_hex_1_val = day_of_month / 16;
   int dom_hex_2_val = day_of_month % 16;
   int dom_x_position = 2 + (int)((((float)day_of_month-1) / (30.0f)) * 114.0f);
-  draw_small_hex(dom_hex_1_val, ctx, dom_x_position, 127); 
-  draw_small_hex(dom_hex_2_val, ctx, dom_x_position + 14, 127); 
-  
+  draw_hex_small(ctx, dom_hex_1_val, dom_x_position, 127); 
+  draw_hex_small(ctx, dom_hex_2_val, dom_x_position + 14, 127); 
+  smear_location_two_wide(dom_hex_1_val, dom_hex_2_val, ctx, dom_x_position, 127, 12, 18, 2, 40, true);
+    
   //Draw month (0-11) (@ y = 147)
   int m_x_position = 2 + (int)((((float)month) / (11.0f)) * 128.0f);
-  draw_small_hex(month+1, ctx, m_x_position, 147); 
+  draw_hex_small(ctx, month+1, m_x_position, 147); 
+  smear_location(month+1, ctx, m_x_position, 147, 12, 18, 40, 2, true);
 }
 
 static void tuple_changed_callback(const uint32_t key, const Tuple* tuple_new, const Tuple* tuple_old, void* context) {
+  if(time_running < 5) return; //Ignore starts with app
   int value = tuple_new->value->uint8;
   switch (key) {
     case setting_power:
       if ((value >= 0) && (value < 2)){
-        lowpower_enabled = value;
-        persist_write_bool(LOW_POWER_KEY, value);
+        lowpower_enabled = (bool) value;
       }
       break;
     case setting_vibrate:
       if ((value >= 0) && (value < 2)){
-        vibrate_enabled = value;
-        persist_write_bool(VIBRATE_KEY, value);
+        vibrate_enabled = (bool) value;
       }
       break;
     case setting_ghost:
       if ((value >= 0) && (value < 2)){
-        ghost_enabled = value;
-        persist_write_bool(GHOST_KEY, value);
+        ghost_enabled = (bool) value;
       }
       break;
     case setting_hourly:
       if ((value >= 0) && (value < 2)){
-        hourly_enabled = value;
-        persist_write_bool(HOURLY_KEY, value);
+        hourly_enabled = (bool) value;
+      }
+      break;
+    case setting_extra:
+      if ((value >= 0) && (value < 2)){
+        extra_enabled = (bool) value;
       }
       break;
   }
@@ -193,7 +218,7 @@ static void tuple_changed_callback(const uint32_t key, const Tuple* tuple_new, c
 
 static void handle_bluetooth(bool connected) {
   is_connected = connected;
-  if(vibrate_enabled) vibes_long_pulse();
+  if(vibrate_enabled && time_running > 5) vibes_long_pulse();
 }
 
 static void handle_battery(BatteryChargeState charge_state) {
@@ -203,6 +228,7 @@ static void handle_battery(BatteryChargeState charge_state) {
 
 static void handle_second_tick(struct tm* tick_time, TimeUnits units_changed) {
   curr_time = tick_time;
+  time_running++;
   
   if(!lowpower_enabled || curr_time->tm_sec % 15 == 0){
     layer_mark_dirty(layer);
@@ -214,16 +240,29 @@ void init(){
   window_stack_push(window, true);
   
   if(persist_exists(VIBRATE_KEY)){
-    vibrate_enabled = persist_read_bool(VIBRATE_KEY);
+    vibrate_enabled = persist_read_int(VIBRATE_KEY);
+  } else {
+    vibrate_enabled = true;
   }
   if(persist_exists(LOW_POWER_KEY)){
-    lowpower_enabled = persist_read_bool(LOW_POWER_KEY);
+    lowpower_enabled = persist_read_int(LOW_POWER_KEY);
+  } else {
+    lowpower_enabled = false;
   }
   if(persist_exists(GHOST_KEY)){
-    ghost_enabled = persist_read_bool(GHOST_KEY);
+    ghost_enabled = persist_read_int(GHOST_KEY);
+  } else {
+    ghost_enabled = true;
   }
   if(persist_exists(HOURLY_KEY)){
-    hourly_enabled = persist_read_bool(HOURLY_KEY);
+    hourly_enabled = persist_read_int(HOURLY_KEY);
+  } else {
+    hourly_enabled = true;
+  }
+  if(persist_exists(EXTRA_KEY)){
+    extra_enabled = persist_read_int(EXTRA_KEY);
+  } else {
+    extra_enabled = true; 
   }
 
   // Init the layer for display the image
@@ -279,14 +318,22 @@ void init(){
     TupletInteger(setting_power, power),
     TupletInteger(setting_vibrate, vibrate),
     TupletInteger(setting_ghost, ghost),
-    TupletInteger(setting_hourly, hourly)
+    TupletInteger(setting_hourly, hourly),
+    TupletInteger(setting_extra, extra)
   };
+  
   app_message_open(160, 160);
   app_sync_init(&sync, buffer, sizeof(buffer), tuples, ARRAY_LENGTH(tuples), tuple_changed_callback, app_error_callback, NULL);
   layer_mark_dirty(layer);
 }
 
 void deinit(){
+  persist_write_int(LOW_POWER_KEY, lowpower_enabled);
+  persist_write_int(VIBRATE_KEY, vibrate_enabled);
+  persist_write_int(GHOST_KEY, ghost_enabled);
+  persist_write_int(HOURLY_KEY, hourly_enabled);
+  persist_write_int(EXTRA_KEY, extra_enabled);
+  
   app_sync_deinit(&sync);
   
   tick_timer_service_unsubscribe();
