@@ -1,3 +1,5 @@
-I release the source of this watchface for all non-commerical projects for free, but I require attribution 
-if over 80% of the codebase is reused. The assets (i.e. image files) are released unencumbered of any license. 
-I retain commerical rights to the source code, concept, and name.
+I release the source of this watchface for all non-commerical projects for free without any attribution 
+requirements (although it certainly would be nice). The assets (i.e. image files) are released unencumbered of any 
+license for all purposes, both commercial and non-commercial. I retain commerical rights to the name and concept, 
+but if substantially changed (i.e. more than 20% of the codebase is changed), I release commercial rights to the 
+source with the requirement of clear attribution (e.g. in an help/about screen).
