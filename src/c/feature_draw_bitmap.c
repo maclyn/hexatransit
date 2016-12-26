@@ -8,10 +8,12 @@ static Layer *layer;
 int is_charging = 0;
 bool is_connected = true;
 int battery_percent = 0;
+static GRect bounds;
 static GBitmap *numbers[16];
 static GBitmap *small_numbers[16];
 static GBitmap *charging_icon;
 static GBitmap *charging_icon_low;
+static Layer *window_layer;
 
 static AppSync sync;
 static uint8_t buffer[256];
@@ -34,18 +36,28 @@ int EXTRA_KEY = 5;
 
 long time_running = 0l;
 
-struct tm* curr_time = NULL;
-
 static void app_error_callback(DictionaryResult dict_error, AppMessageResult app_message_error, void* context) {
 }
 
 static void draw_hex(int value, bool is_small, GContext* ctx, int x, int y, int w, int h){
+  //APP_LOG(APP_LOG_LEVEL_DEBUG, "handling drawing hex");
+  
+  //APP_LOG(APP_LOG_LEVEL_DEBUG, "drawing %d value; is small = %d", value, is_small);
+  if(small_numbers == NULL)
+    APP_LOG(APP_LOG_LEVEL_WARNING, "small numbers is null");
+  if(numbers == NULL)
+    APP_LOG(APP_LOG_LEVEL_WARNING, "numbers is null");
+  if(ctx == NULL)
+    APP_LOG(APP_LOG_LEVEL_WARNING, "ctx is null");
+  
   if(is_small)
     graphics_draw_bitmap_in_rect(ctx, small_numbers[value],
        (GRect) { .origin = { x, y }, .size = { w, h } });
   else 
     graphics_draw_bitmap_in_rect(ctx, numbers[value],
        (GRect) { .origin = { x, y }, .size = { w, h } });
+  
+  //APP_LOG(APP_LOG_LEVEL_DEBUG, "done handling draw hex");
 }
 
 static void draw_hex_small(GContext* ctx, int value, int x, int y){
@@ -57,6 +69,8 @@ static void draw_hex_big(GContext* ctx, int value, int x, int y){
 }
 
 static void smear_location_internal(GContext* ctx, int x, int y, int pixels, int w, int h){
+  //APP_LOG(APP_LOG_LEVEL_DEBUG, "handling smear location internal");
+  
   graphics_context_set_stroke_color(ctx, GColorWhite);
   while(pixels > 0){
     int x_smear = rand() % w;
@@ -65,10 +79,14 @@ static void smear_location_internal(GContext* ctx, int x, int y, int pixels, int
     pixels--;
   }
   graphics_context_set_stroke_color(ctx, GColorBlack);
+  
+  //APP_LOG(APP_LOG_LEVEL_DEBUG, "done handling smear location internal");
 }
 
 static void smear_location(int digit, GContext* ctx, int x, 
                            int y, int w, int h, int pixels, int spacing, bool is_small){
+  //APP_LOG(APP_LOG_LEVEL_DEBUG, "handling smear location");
+  
   if((!ghost_enabled && !is_small) || (!extra_enabled && is_small)) return;
   x -= (w + spacing);
   int smear_count = 1;
@@ -79,12 +97,16 @@ static void smear_location(int digit, GContext* ctx, int x,
     smear_count++;
     x -= (w + spacing);
   }
+  
+  //APP_LOG(APP_LOG_LEVEL_DEBUG, "done handling smear location");
 }
 
 //Smear location for elements two digits wide
 static void smear_location_two_wide(int digit1, int digit2, GContext* ctx, 
                                   int x, int y, int w, int h, int spacing, int pixels, 
                                   bool is_small){
+  //APP_LOG(APP_LOG_LEVEL_DEBUG, "handling location smear two wide");
+  
   if((!ghost_enabled && !is_small) || (!extra_enabled && is_small)) return;
   x -= ((w + spacing) * 2);
   int smear_count = 1;
@@ -97,14 +119,16 @@ static void smear_location_two_wide(int digit1, int digit2, GContext* ctx,
     smear_count++;
     x -= 2 * (w + spacing);
   }
+  
+  //APP_LOG(APP_LOG_LEVEL_DEBUG, "done hanling location smear two wide");
 }
 
 static void layer_update_callback(Layer *me, GContext* ctx) {
-  if(curr_time == NULL){
-    time_t in_time_units;
-    time(&in_time_units);
-    curr_time = localtime(&in_time_units);
-  }
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "handling layer update callback");
+  
+  time_t in_time_units;
+  time(&in_time_units);
+  struct tm* curr_time = localtime(&in_time_units);
   
   int hours = curr_time->tm_hour;
   int minutes = curr_time->tm_min;
@@ -112,6 +136,8 @@ static void layer_update_callback(Layer *me, GContext* ctx) {
   int month = curr_time->tm_mon;
   int day_of_month = curr_time->tm_mday;
   int day_of_week = curr_time->tm_wday;
+  
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "time is : %d:%d:%d", hours, minutes, seconds);
   
   if(hourly_enabled && minutes == 0 && seconds == 0){
     vibes_long_pulse();
@@ -182,9 +208,13 @@ static void layer_update_callback(Layer *me, GContext* ctx) {
   int m_x_position = 2 + (int)((((float)month) / (11.0f)) * 128.0f);
   draw_hex_small(ctx, month+1, m_x_position, 147); 
   smear_location(month+1, ctx, m_x_position, 147, 12, 18, 40, 2, true);
+  
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "done handling layer update");
 }
 
 static void tuple_changed_callback(const uint32_t key, const Tuple* tuple_new, const Tuple* tuple_old, void* context) {
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "handling tuple change");
+  
   if(time_running < 5) return; //Ignore starts with app
   int value = tuple_new->value->uint8;
   switch (key) {
@@ -214,28 +244,43 @@ static void tuple_changed_callback(const uint32_t key, const Tuple* tuple_new, c
       }
       break;
   }
+  
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "done handling tuple change");
 }
 
 static void handle_bluetooth(bool connected) {
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "handling bt change");
+  
   is_connected = connected;
   if(vibrate_enabled && time_running > 5) vibes_long_pulse();
+  
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "done handling bt change");
 }
 
 static void handle_battery(BatteryChargeState charge_state) {
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "handling battery change");
+  
   is_charging = charge_state.is_charging;
   battery_percent = charge_state.charge_percent;
+  
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "done handling battery change");
 }
 
 static void handle_second_tick(struct tm* tick_time, TimeUnits units_changed) {
-  curr_time = tick_time;
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "handling tick");
+
   time_running++;
   
-  if(!lowpower_enabled || curr_time->tm_sec % 15 == 0){
+  if(!lowpower_enabled || tick_time->tm_sec % 15 == 0){
     layer_mark_dirty(layer);
   }
+  
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "done handling tick");
 }
 
 void init(){
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "initing");
+  
   window = window_create();
   window_stack_push(window, true);
   
@@ -264,10 +309,12 @@ void init(){
   } else {
     extra_enabled = true; 
   }
+  
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "init'd settings");
 
   // Init the layer for display the image
-  Layer *window_layer = window_get_root_layer(window);
-  GRect bounds = layer_get_frame(window_layer);
+  window_layer = window_get_root_layer(window);
+  bounds = layer_get_frame(window_layer);
   layer = layer_create(bounds);
   layer_set_update_proc(layer, layer_update_callback);
   layer_add_child(window_layer, layer);
@@ -306,6 +353,8 @@ void init(){
   charging_icon = gbitmap_create_with_resource(RESOURCE_ID_CHARGING_ICON);
   charging_icon_low = gbitmap_create_with_resource(RESOURCE_ID_CHARGING_ICON_LOW);
   
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "init'd windows + all resources");
+  
   srand(time(NULL));
   
   tick_timer_service_subscribe(SECOND_UNIT, &handle_second_tick);
@@ -313,6 +362,8 @@ void init(){
   bluetooth_connection_service_subscribe(&handle_bluetooth);
   handle_bluetooth(bluetooth_connection_service_peek());
   handle_battery(battery_state_service_peek());
+  
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "init'd callbacks");
   
   Tuplet tuples[] = {
     TupletInteger(setting_power, power),
@@ -325,9 +376,13 @@ void init(){
   app_message_open(160, 160);
   app_sync_init(&sync, buffer, sizeof(buffer), tuples, ARRAY_LENGTH(tuples), tuple_changed_callback, app_error_callback, NULL);
   layer_mark_dirty(layer);
+  
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "done init'ing");
 }
 
 void deinit(){
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "deiniting");
+  
   persist_write_int(LOW_POWER_KEY, lowpower_enabled);
   persist_write_int(VIBRATE_KEY, vibrate_enabled);
   persist_write_int(GHOST_KEY, ghost_enabled);
