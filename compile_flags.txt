@@ -1,0 +1,4 @@
+-I/Users/maclyn/Library/Application Support/Pebble SDK/SDKs/current/sdk-core/pebble/emery/include
+-I/Users/maclyn/Library/Application Support/Pebble SDK/SDKs/current/sdk-core/pebble/common/include
+-I/Users/maclyn/Git/hexatransit/build/src
+-I/Users/maclyn/Git/hexatransit/build/emery/src

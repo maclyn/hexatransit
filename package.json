@@ -1,16 +1,25 @@
 {
     "author": "IniPage Software",
-    "dependencies": {},
     "keywords": [],
     "name": "hexatransit",
+    "dependencies": {
+        "@rebble/clay": "^1.0.8"
+    },
     "pebble": {
         "capabilities": [
             "configurable"
         ],
         "displayName": "HexaTransit",
-        "enableMultiJS": false,
-        "messageKeys": [],
+        "enableMultiJS": true,
+        "messageKeys": [
+            "PowerMode",
+            "GhostHours",
+            "GhostSeconds",
+            "HourlyVibrate",
+            "DisconnectVibrate"
+        ],
         "projectType": "native",
+        "private": true,
         "resources": {
             "media": [
                 {
@@ -195,12 +204,13 @@
         "targetPlatforms": [
             "aplite",
             "basalt",
-            "diorite"
+            "diorite",
+            "emery"
         ],
         "uuid": "2e958d67-dbc3-430e-952e-d07890236352",
         "watchapp": {
             "watchface": true
         }
     },
-    "version": "1.2.0"
+    "version": "1.2.1"
 }
