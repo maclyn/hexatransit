@@ -17,6 +17,15 @@
 #include "resource_ids.auto.h"
 #endif
 
+#define BIG_DIGIT_WIDTH_PX 30
+#define BIG_DIGIT_HEIGHT_PX 45
+#define SMALL_DIGIT_WIDTH_PX 12
+#define SMALL_DIGIT_HEIGHT_PX 18
+#define CHARGING_ICON_WIDTH_PX 14
+#define CHARGING_ICON_HEIGHT_PX 5
+#define PADDING_BTW_ELEMENTS_PX 2
+
+#define NOISE_SRC_LEN 128
 #define HEX_DIGIT_COUNT 16
 
 #define SETTINGS_KEY 1
@@ -40,8 +49,8 @@ const int SMALL_NUMBER_RESOURCE_IDS[] = {
 
 typedef struct ClaySettings {
   bool PowerMode;
-  bool GhostHours;
-  bool GhostSeconds;
+  bool GhostTime;
+  bool GhostDate;
   bool HourlyVibrate;
   bool DisconnectVibrate;
 } ClaySettings;
@@ -52,10 +61,11 @@ static Layer *window_layer;
 ClaySettings settings;
 static GRect bounds;
 
-static GBitmap *numbers[HEX_DIGIT_COUNT];
-static GBitmap *small_numbers[HEX_DIGIT_COUNT];
-static GBitmap *charging_icon;
-static GBitmap *charging_icon_low;
+static GBitmap *big_numerals_bmps[HEX_DIGIT_COUNT];
+static GBitmap *small_numerals_bmps[HEX_DIGIT_COUNT];
+static GBitmap *fades_htl_sz_amnt_bmps[2][2];
+static GBitmap *charging_icon_bmp;
+static GBitmap *charging_icon_low_bmp;
 
 long time_running = 0L;
 int is_charging = 0;
@@ -64,83 +74,24 @@ int battery_percent = 0;
 
 static void draw_hex(int value, bool is_small, GContext *ctx, int x, int y,
                      int w, int h) {
-  const GBitmap *bmp = is_small ? small_numbers[value] : numbers[value];
+  const GBitmap *bmp =
+      is_small ? small_numerals_bmps[value] : big_numerals_bmps[value];
   graphics_draw_bitmap_in_rect(ctx, bmp,
                                (GRect){.origin = {x, y}, .size = {w, h}});
 }
 
 static void draw_hex_small(GContext *ctx, int value, int x, int y) {
-  draw_hex(value, true, ctx, x, y, 12, 18);
+  draw_hex(value, true, ctx, x, y, SMALL_DIGIT_WIDTH_PX, SMALL_DIGIT_HEIGHT_PX);
 }
 
 static void draw_hex_big(GContext *ctx, int value, int x, int y) {
-  draw_hex(value, false, ctx, x, y, 30, 45);
+  draw_hex(value, false, ctx, x, y, BIG_DIGIT_WIDTH_PX, BIG_DIGIT_HEIGHT_PX);
 }
 
-static void smear_location_internal(GContext *ctx, int x, int y, int pixels,
-                                    int w, int h) {
-  // VERBOSE_LOG("handling smear location internal");
+static void smear_left_from_location(int x, int y, bool is_double_wide,
+                                     bool is_small) {
 
-  graphics_context_set_stroke_color(ctx, GColorWhite);
-  while (pixels > 0) {
-    int x_smear = rand() % w;
-    int y_smear = rand() % h;
-    graphics_draw_pixel(ctx, GPoint(x + x_smear, y + y_smear));
-    pixels--;
-  }
-  graphics_context_set_stroke_color(ctx, GColorBlack);
-
-  // VERBOSE_LOG("done handling smear location internal");
-}
-
-static void smear_location(int digit, GContext *ctx, int x, int y, int w, int h,
-                           int pixels, int spacing, bool is_small) {
-  // VERBOSE_LOG("handling smear location");
-
-  if ((!settings.GhostHours && !is_small) ||
-      (!settings.GhostSeconds && is_small)) {
-    return;
-  }
-
-  x -= (w + spacing);
-  int smear_count = 1;
-  while (x > -(w + spacing)) {
-    draw_hex(digit, is_small, ctx, x, y, w, h);
-    //"Smear" the location by drawing random white pixels 20 x count times over
-    // the image
-    smear_location_internal(ctx, x, y, pixels * smear_count, w, h);
-    smear_count++;
-    x -= (w + spacing);
-  }
-
-  // VERBOSE_LOG("done handling smear location");
-}
-
-// Smear location for elements two digits wide
-static void smear_location_two_wide(int digit1, int digit2, GContext *ctx,
-                                    int x, int y, int w, int h, int spacing,
-                                    int pixels, bool is_small) {
-  // VERBOSE_LOG("handling location smear two wide");
-
-  if ((!settings.GhostHours && !is_small) ||
-      (!settings.GhostSeconds && is_small)) {
-    return;
-  }
-
-  x -= ((w + spacing) * 2);
-  int smear_count = 1;
-  while (x > (-2 * (w + spacing))) {
-    draw_hex(digit1, is_small, ctx, x, y, w, h);
-    smear_location_internal(ctx, x, y, pixels * smear_count, w, h);
-    draw_hex(digit2, is_small, ctx, x + w + spacing, y, w, h);
-    smear_location_internal(ctx, x + w + spacing, y, pixels * smear_count, w,
-                            h);
-    // One step forward
-    smear_count++;
-    x -= 2 * (w + spacing);
-  }
-
-  // VERBOSE_LOG("done hanling location smear two wide");
+  // TODO
 }
 
 static void layer_update_callback(Layer *me, GContext *ctx) {
@@ -163,14 +114,23 @@ static void layer_update_callback(Layer *me, GContext *ctx) {
     vibes_long_pulse();
   }
 
+  int edge_padding = 2;
+
   // Draw the hours in hex
+  // Always renders in 12 hour time
   int hour_value = hours;
-  if (hour_value > 11 && !clock_is_24h_style()) {
+  if (hour_value > 11) {
     hour_value -= 12;
   }
-  int hour_x_position = 2 + (int)((((float)hours) / (23.0f)) * 110.0f);
-  draw_hex_big(ctx, hour_value, hour_x_position, 2);
-  smear_location(hour_value, ctx, hour_x_position, 2, 30, 45, 200, 2, false);
+
+  // 168 - 2 - 2 = 164 - 110.0 = 54.0
+  //
+  float hour_pct_across_screen = (float)hours / 23.0F;
+  int hour_x_position = edge_padding + (int)(hour_pct_across_screen * 110.0F);
+  draw_hex_big(ctx, hour_value, hour_x_position, edge_padding);
+  // smear_location(hour_value, ctx, hour_x_position, edge_padding,
+  //                BIG_DIGIT_WIDTH_PX, BIG_DIGIT_HEIGHT_PX, 200, edge_padding,
+  //                false);
 
   // Draw the minutes in hex
   int first_hex_digit = minutes / HEX_DIGIT_COUNT;
@@ -178,8 +138,9 @@ static void layer_update_callback(Layer *me, GContext *ctx) {
   int min_x_position = 2 + (int)((((float)minutes) / (60.0f)) * 78.0f);
   draw_hex_big(ctx, first_hex_digit, min_x_position, 49);
   draw_hex_big(ctx, second_hex_digit, min_x_position + 32, 49);
-  smear_location_two_wide(first_hex_digit, second_hex_digit, ctx,
-                          min_x_position, 49, 30, 45, 2, 200, false);
+  // smear_location_two_wide(first_hex_digit, second_hex_digit, ctx,
+  //                         min_x_position, 49, BIG_DIGIT_WIDTH_PX,
+  //                         BIG_DIGIT_HEIGHT_PX, 2, 200, false);
 
   // Draw the seconds with lines
   int x_pos = 2;
@@ -208,19 +169,20 @@ static void layer_update_callback(Layer *me, GContext *ctx) {
   } else { // Draw charging image
     if (seconds % 2) {
       graphics_draw_bitmap_in_rect(
-          ctx, charging_icon_low,
+          ctx, charging_icon_low_bmp,
           (GRect){.origin = {128, 98}, .size = {14, 5}});
     } else {
       graphics_draw_bitmap_in_rect(
-          ctx, charging_icon, (GRect){.origin = {128, 98}, .size = {14, 5}});
+          ctx, charging_icon_bmp,
+          (GRect){.origin = {128, 98}, .size = {14, 5}});
     }
   }
 
   // Draw day of week (0-7) (@ y = 107)
   int dow_x_position = 2 + (int)((((float)day_of_week) / (6.0f)) * 128.0f);
   draw_hex_small(ctx, day_of_week + 1, dow_x_position, 107);
-  smear_location(day_of_week + 1, ctx, dow_x_position, 107, 12, 18, 40, 2,
-                 true);
+  // smear_location(day_of_week + 1, ctx, dow_x_position, 107, 12, 18, 40, 2,
+  //                true);
 
   // Draw day of month (0-31) (@ y = 127)
   int dom_hex_1_val = day_of_month / HEX_DIGIT_COUNT;
@@ -229,13 +191,13 @@ static void layer_update_callback(Layer *me, GContext *ctx) {
       2 + (int)((((float)day_of_month - 1) / (30.0f)) * 114.0f);
   draw_hex_small(ctx, dom_hex_1_val, dom_x_position, 127);
   draw_hex_small(ctx, dom_hex_2_val, dom_x_position + 14, 127);
-  smear_location_two_wide(dom_hex_1_val, dom_hex_2_val, ctx, dom_x_position,
-                          127, 12, 18, 2, 40, true);
+  // smear_location_two_wide(dom_hex_1_val, dom_hex_2_val, ctx, dom_x_position,
+  //                         127, 12, 18, 2, 40, true);
 
   // Draw month (0-11) (@ y = 147)
   int m_x_position = 2 + (int)((((float)month) / (11.0f)) * 128.0f);
   draw_hex_small(ctx, month + 1, m_x_position, 147);
-  smear_location(month + 1, ctx, m_x_position, 147, 12, 18, 40, 2, true);
+  // smear_location(month + 1, ctx, m_x_position, 147, 12, 18, 40, 2, true);
 
   VERBOSE_LOG("layer_update_callback() complete");
 }
@@ -254,7 +216,7 @@ static void handle_battery(BatteryChargeState charge_state) {
 
 static void handle_second_tick(struct tm *tick_time, TimeUnits units_changed) {
   time_running++;
-  if (!settings.PowerMode || tick_time->tm_sec % 15 == 0) {
+  if (settings.PowerMode || tick_time->tm_sec % 15 == 0) {
     layer_mark_dirty(layer);
   }
 }
@@ -264,19 +226,19 @@ static void inbox_received_callback(DictionaryIterator *iterator,
   VERBOSE_LOG("Inbox message received");
 
   Tuple *power_mode_tuple = dict_find(iterator, MESSAGE_KEY_PowerMode);
-  Tuple *ghost_hours_tuple = dict_find(iterator, MESSAGE_KEY_GhostHours);
-  Tuple *ghost_seconds_tuple = dict_find(iterator, MESSAGE_KEY_GhostSeconds);
+  Tuple *ghost_time_tuple = dict_find(iterator, MESSAGE_KEY_GhostTime);
+  Tuple *ghost_date_tuple = dict_find(iterator, MESSAGE_KEY_GhostDate);
   Tuple *hourly_vibrate_tuple = dict_find(iterator, MESSAGE_KEY_HourlyVibrate);
   Tuple *disconnect_vibrate_tuple =
       dict_find(iterator, MESSAGE_KEY_DisconnectVibrate);
   if (power_mode_tuple) {
     settings.PowerMode = power_mode_tuple->value->int32 == 1;
   }
-  if (ghost_hours_tuple) {
-    settings.GhostHours = ghost_hours_tuple->value->int32 == 1;
+  if (ghost_time_tuple) {
+    settings.GhostTime = ghost_time_tuple->value->int32 == 1;
   }
-  if (ghost_seconds_tuple) {
-    settings.GhostSeconds = ghost_seconds_tuple->value->int32 == 1;
+  if (ghost_date_tuple) {
+    settings.GhostDate = ghost_date_tuple->value->int32 == 1;
   }
   if (hourly_vibrate_tuple) {
     settings.HourlyVibrate = hourly_vibrate_tuple->value->int32 == 1;
@@ -284,7 +246,7 @@ static void inbox_received_callback(DictionaryIterator *iterator,
   if (disconnect_vibrate_tuple) {
     settings.DisconnectVibrate = disconnect_vibrate_tuple->value->int32 == 1;
   }
-  if (power_mode_tuple || ghost_hours_tuple || ghost_seconds_tuple ||
+  if (power_mode_tuple || ghost_time_tuple || ghost_date_tuple ||
       hourly_vibrate_tuple || disconnect_vibrate_tuple) {
     persist_write_data(SETTINGS_KEY, &settings, sizeof(ClaySettings));
   }
@@ -309,11 +271,15 @@ void init() {
 
   // Defaults, matching config.js
   settings.PowerMode = true;
-  settings.GhostHours = true;
-  settings.GhostSeconds = true;
+  settings.GhostTime = true;
+  settings.GhostDate = true;
   settings.HourlyVibrate = true;
   settings.DisconnectVibrate = true;
-  persist_read_data(SETTINGS_KEY, &settings, sizeof(settings));
+  if (persist_read_data(SETTINGS_KEY, &settings, sizeof(settings)) ==
+      E_DOES_NOT_EXIST) {
+    APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to read settings! Writing defaults");
+    persist_write_data(SETTINGS_KEY, &settings, sizeof(settings));
+  }
 
   // Init the layer for display the image
   window_layer = window_get_root_layer(window);
@@ -323,13 +289,22 @@ void init() {
   layer_add_child(window_layer, layer);
 
   for (int i = 0; i < HEX_DIGIT_COUNT; i++) {
-    numbers[i] = gbitmap_create_with_resource(BIG_NUMBER_RESOURCE_IDS[i]);
-    small_numbers[i] =
+    big_numerals_bmps[i] =
+        gbitmap_create_with_resource(BIG_NUMBER_RESOURCE_IDS[i]);
+    small_numerals_bmps[i] =
         gbitmap_create_with_resource(SMALL_NUMBER_RESOURCE_IDS[i]);
   }
-  charging_icon = gbitmap_create_with_resource(RESOURCE_ID_CHARGING_ICON);
-  charging_icon_low =
+  charging_icon_bmp = gbitmap_create_with_resource(RESOURCE_ID_CHARGING_ICON);
+  charging_icon_low_bmp =
       gbitmap_create_with_resource(RESOURCE_ID_CHARGING_ICON_LOW);
+  fades_htl_sz_amnt_bmps[0][0] =
+      gbitmap_create_with_resource(RESOURCE_ID_SMEAR_50);
+  fades_htl_sz_amnt_bmps[0][1] =
+      gbitmap_create_with_resource(RESOURCE_ID_SMEAR_25);
+  fades_htl_sz_amnt_bmps[1][0] =
+      gbitmap_create_with_resource(RESOURCE_ID_SMEAR_SMALL_50);
+  fades_htl_sz_amnt_bmps[1][1] =
+      gbitmap_create_with_resource(RESOURCE_ID_SMEAR_SMALL_25);
 
   VERBOSE_LOG("init'd windows + all resources");
 
@@ -354,11 +329,16 @@ void deinit() {
   bluetooth_connection_service_unsubscribe();
 
   for (int i = 0; i < HEX_DIGIT_COUNT; i++) {
-    gbitmap_destroy(numbers[i]);
-    gbitmap_destroy(small_numbers[i]);
+    gbitmap_destroy(big_numerals_bmps[i]);
+    gbitmap_destroy(small_numerals_bmps[i]);
   }
-  gbitmap_destroy(charging_icon);
-  gbitmap_destroy(charging_icon_low);
+  for (int i = 0; i < 2; i++) {
+    for (int j = 0; j < 2; j++) {
+      gbitmap_destroy(fades_htl_sz_amnt_bmps[i][j]);
+    }
+  }
+  gbitmap_destroy(charging_icon_bmp);
+  gbitmap_destroy(charging_icon_low_bmp);
 
   window_destroy(window);
   layer_destroy(layer);

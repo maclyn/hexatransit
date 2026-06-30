@@ -13,8 +13,8 @@
         "enableMultiJS": true,
         "messageKeys": [
             "PowerMode",
-            "GhostHours",
-            "GhostSeconds",
+            "GhostTime",
+            "GhostDate",
             "HourlyVibrate",
             "DisconnectVibrate"
         ],
@@ -26,6 +26,26 @@
                     "file": "images/menuimg.png",
                     "menuIcon": true,
                     "name": "MENU_IMAGE",
+                    "type": "png"
+                },
+                {
+                    "file": "images/SMEAR_25.png",
+                    "name": "SMEAR_25",
+                    "type": "png"
+                },
+                {
+                    "file": "images/SMEAR_50.png",
+                    "name": "SMEAR_50",
+                    "type": "png"
+                },
+                {
+                    "file": "images/SMEAR_SMALL_25.png",
+                    "name": "SMEAR_SMALL_25",
+                    "type": "png"
+                },
+                {
+                    "file": "images/SMEAR_SMALL_50.png",
+                    "name": "SMEAR_SMALL_50",
                     "type": "png"
                 },
                 {

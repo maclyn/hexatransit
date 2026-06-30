@@ -22,14 +22,14 @@ module.exports = [
             },
             {
                 "type": "toggle",
-                "messageKey": "GhostHours",
-                "label": "Ghost trails for hours (uses more power)",
+                "messageKey": "GhostTime",
+                "label": "Ghost trails for time (uses more power)",
                 "defaultValue": true
             },
             {
                 "type": "toggle",
-                "messageKey": "GhostSeconds",
-                "label": "Ghost trails for seconds (uses more power)",
+                "messageKey": "GhostDate",
+                "label": "Ghost trails for date (uses more power)",
                 "defaultValue": true
             },
             {
