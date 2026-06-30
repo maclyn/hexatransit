@@ -11,6 +11,7 @@
 #ifndef PBL_DISPLAY_WIDTH
 #define PBL_DISPLAY_HEIGHT 228
 #define PBL_DISPLAY_WIDTH 200
+#define PLAT PlatformTypeEmery
 #endif
 
 #ifndef RESOURCE_ID_SMALL_NUMBER_F
@@ -21,11 +22,57 @@
 #define BIG_DIGIT_HEIGHT_PX 45
 #define SMALL_DIGIT_WIDTH_PX 12
 #define SMALL_DIGIT_HEIGHT_PX 18
+
+// Seconds - Connected - Battery
+#define SECONDS_BATT_CONN_ROW_TOTAL_HEIGHT_PX 8
+#define SECONDS_INDICATOR_HEIGHT_PX SECONDS_BATT_CONN_ROW_TOTAL_HEIGHT_PX
+#define SECONDS_INDICATOR_WIDTH_PX 1
+#define SECONDS_INDICATOR_INTERNAL_PADDING_W_PX 1
+#define CONNECTED_ICON_W_H_PX 3
+#define CONN_ICON_OFFSET_INSIDE_ROW_PX                                         \
+  ((SECONDS_BATT_CONN_ROW_TOTAL_HEIGHT_PX - CONNECTED_ICON_W_H_PX) / 2)
+#define BATTERY_BAR_WIDTH_PX 1
+#define BATTERY_BAR_HEIGHT_PX 4
+#define BATTERY_BAR_INTERNAL_PADDING_W_PX 1
 #define CHARGING_ICON_WIDTH_PX 14
 #define CHARGING_ICON_HEIGHT_PX 5
-#define PADDING_BTW_ELEMENTS_PX 2
+#define BATT_OFFSET_INSIDE_ROW_PX                                              \
+  ((SECONDS_BATT_CONN_ROW_TOTAL_HEIGHT_PX - BATTERY_BAR_HEIGHT_PX) / 2)
+#define SECONDS_BATT_CONN_ROW_TOTAL_WIDTH_PX                                   \
+  ((60 * SECONDS_INDICATOR_WIDTH_PX) +                                         \
+   (59 * SECONDS_INDICATOR_INTERNAL_PADDING_W_PX) + INTERNAL_ITEM_PADDING_PX + \
+   CONNECTED_ICON_W_H_PX + INTERNAL_ITEM_PADDING_PX + CHARGING_ICON_WIDTH_PX)
+#define SECONDS_BATT_CONN_ROW_LEFT_OFFSET_PX                                   \
+  ((PBL_DISPLAY_WIDTH - SECONDS_BATT_CONN_ROW_TOTAL_WIDTH_PX) / 2)
 
-#define NOISE_SRC_LEN 128
+#define ROWS_OF_CONTENT 6 // Hours, minutes, seconds/battery, 3 date comps.
+#define CONTENT_TOTAL_HEIGHT_PX                                                \
+  ((BIG_DIGIT_HEIGHT_PX * 2) + (SMALL_DIGIT_HEIGHT_PX * 3) +                   \
+   SECONDS_INDICATOR_HEIGHT_PX) // (45 * 2) + (18 * 3) + 8 = 152
+#define EXTERNAL_PADDING_TOTAL_PX (PBL_DISPLAY_HEIGHT - CONTENT_TOTAL_HEIGHT_PX)
+#define INTERNAL_ITEM_PADDING_PX 2
+#define EXTERNAL_ITEM_HORIZONTAL_PADDING_PX 2
+#define EXTERNAL_ITEM_VERTICAL_PADDING_PX                                      \
+  (EXTERNAL_PADDING_TOTAL_PX / (ROWS_OF_CONTENT + 2))
+// EXTERNAL_ITEM_PADDING_PX resolves to 9.5 on PT2, integer rounding down to 9
+// This "throws out" (.5 * 8) pixels that we have to account for, so we pad in
+// an extra 2 pixels on top
+// On everything else, it resolves to 2
+#define EXTRA_VERTICAL_PADDING_PX                                              \
+  (PBL_PLATFORM_TYPE_CURRENT == PlatformTypeEmery ? 2 : 0)
+#define HORIZONTAL_TRACK_WIDTH_PX                                              \
+  (PBL_DISPLAY_WIDTH - (2 * EXTERNAL_ITEM_HORIZONTAL_PADDING_PX))
+#define SINGLE_WIDE_BIG_DIGIT_MOVEMENT_WIDTH_PX                                \
+  (HORIZONTAL_TRACK_WIDTH_PX - BIG_DIGIT_WIDTH_PX)
+#define DOUBLE_WIDE_BIG_DIGIT_MOVEMENT_WIDTH_PX                                \
+  (HORIZONTAL_TRACK_WIDTH_PX - (BIG_DIGIT_WIDTH_PX * 2) -                      \
+   INTERNAL_ITEM_PADDING_PX)
+#define SINGLE_WIDE_SMALL_DIGIT_MOVEMENT_WIDTH_PX                              \
+  (HORIZONTAL_TRACK_WIDTH_PX - SMALL_DIGIT_WIDTH_PX)
+#define DOUBLE_WIDE_SMALL_DIGIT_MOVEMENT_WIDTH_PX                              \
+  (HORIZONTAL_TRACK_WIDTH_PX - (SMALL_DIGIT_WIDTH_PX * 2) -                    \
+   INTERNAL_ITEM_PADDING_PX)
+
 #define HEX_DIGIT_COUNT 16
 
 #define SETTINGS_KEY 1
@@ -114,8 +161,6 @@ static void layer_update_callback(Layer *me, GContext *ctx) {
     vibes_long_pulse();
   }
 
-  int edge_padding = 2;
-
   // Draw the hours in hex
   // Always renders in 12 hour time
   int hour_value = hours;
@@ -123,80 +168,119 @@ static void layer_update_callback(Layer *me, GContext *ctx) {
     hour_value -= 12;
   }
 
-  // 168 - 2 - 2 = 164 - 110.0 = 54.0
-  //
+  int y_offset = EXTERNAL_ITEM_VERTICAL_PADDING_PX + EXTRA_VERTICAL_PADDING_PX;
+
   float hour_pct_across_screen = (float)hours / 23.0F;
-  int hour_x_position = edge_padding + (int)(hour_pct_across_screen * 110.0F);
-  draw_hex_big(ctx, hour_value, hour_x_position, edge_padding);
+  int hour_x_position =
+      EXTERNAL_ITEM_HORIZONTAL_PADDING_PX +
+      (hour_pct_across_screen * SINGLE_WIDE_BIG_DIGIT_MOVEMENT_WIDTH_PX);
+  draw_hex_big(ctx, hour_value, hour_x_position, y_offset);
   // smear_location(hour_value, ctx, hour_x_position, edge_padding,
   //                BIG_DIGIT_WIDTH_PX, BIG_DIGIT_HEIGHT_PX, 200, edge_padding,
   //                false);
+  y_offset += BIG_DIGIT_HEIGHT_PX + EXTERNAL_ITEM_VERTICAL_PADDING_PX;
 
   // Draw the minutes in hex
   int first_hex_digit = minutes / HEX_DIGIT_COUNT;
   int second_hex_digit = minutes % HEX_DIGIT_COUNT;
-  int min_x_position = 2 + (int)((((float)minutes) / (60.0f)) * 78.0f);
-  draw_hex_big(ctx, first_hex_digit, min_x_position, 49);
-  draw_hex_big(ctx, second_hex_digit, min_x_position + 32, 49);
+  float min_pct_across_screen = (float)minutes / 60.0F;
+  int min_x_position =
+      EXTERNAL_ITEM_HORIZONTAL_PADDING_PX +
+      (min_pct_across_screen * DOUBLE_WIDE_BIG_DIGIT_MOVEMENT_WIDTH_PX);
+  draw_hex_big(ctx, first_hex_digit, min_x_position, y_offset);
+  draw_hex_big(ctx, second_hex_digit,
+               min_x_position + BIG_DIGIT_WIDTH_PX + INTERNAL_ITEM_PADDING_PX,
+               y_offset);
   // smear_location_two_wide(first_hex_digit, second_hex_digit, ctx,
   //                         min_x_position, 49, BIG_DIGIT_WIDTH_PX,
   //                         BIG_DIGIT_HEIGHT_PX, 2, 200, false);
+  y_offset += BIG_DIGIT_HEIGHT_PX + EXTERNAL_ITEM_VERTICAL_PADDING_PX;
 
   // Draw the seconds with lines
-  int x_pos = 2;
+  int x_pos = SECONDS_BATT_CONN_ROW_LEFT_OFFSET_PX;
   int seconds_dup = seconds;
   while (seconds_dup > 0) {
-    graphics_draw_line(ctx, GPoint(x_pos, 96), GPoint(x_pos, 104));
-    x_pos += 2;
+    graphics_draw_line(ctx, GPoint(x_pos, y_offset),
+                       GPoint(x_pos, y_offset + SECONDS_INDICATOR_HEIGHT_PX));
+    x_pos +=
+        (SECONDS_INDICATOR_WIDTH_PX + SECONDS_INDICATOR_INTERNAL_PADDING_W_PX);
     seconds_dup--;
   }
 
   // Draw divider between seconds/battery (only if connected)
-  if (is_connected)
-    graphics_fill_rect(ctx, (GRect){.origin = {123, 99}, .size = {3, 3}}, 0,
-                       GCornerNone);
+  x_pos += INTERNAL_ITEM_PADDING_PX;
+  if (is_connected) {
+    graphics_fill_rect(
+        ctx,
+        (GRect){.origin = {x_pos, y_offset + CONN_ICON_OFFSET_INSIDE_ROW_PX},
+                .size = {CONNECTED_ICON_W_H_PX, CONNECTED_ICON_W_H_PX}},
+        0, GCornerNone);
+  }
+  x_pos += (CONNECTED_ICON_W_H_PX + INTERNAL_ITEM_PADDING_PX);
 
   // Draw battery with lines
   if (!is_charging) {
-    int battery_lines = (int)((((float)battery_percent) / (100.0f)) * 7.0f);
-    int battery_x_pos = 128;
+    float batt_pct_across_section = (float)battery_percent / 100.0F;
+    int battery_lines = (int)(batt_pct_across_section * 7.0F);
+    int battery_x_pos = x_pos;
     while (battery_lines > 0) {
-      graphics_draw_line(ctx, GPoint(battery_x_pos, 98),
-                         GPoint(battery_x_pos, 102));
-      battery_x_pos += 2;
+      graphics_draw_line(
+          ctx, GPoint(battery_x_pos, y_offset + BATT_OFFSET_INSIDE_ROW_PX),
+          GPoint(battery_x_pos,
+                 y_offset + BATT_OFFSET_INSIDE_ROW_PX + BATTERY_BAR_HEIGHT_PX));
+      battery_x_pos +=
+          (BATTERY_BAR_WIDTH_PX + BATTERY_BAR_INTERNAL_PADDING_W_PX);
       battery_lines--;
     }
   } else { // Draw charging image
     if (seconds % 2) {
       graphics_draw_bitmap_in_rect(
           ctx, charging_icon_low_bmp,
-          (GRect){.origin = {128, 98}, .size = {14, 5}});
+          (GRect){.origin = {x_pos, y_offset + BATT_OFFSET_INSIDE_ROW_PX},
+                  .size = {CHARGING_ICON_WIDTH_PX, CHARGING_ICON_HEIGHT_PX}});
     } else {
       graphics_draw_bitmap_in_rect(
           ctx, charging_icon_bmp,
-          (GRect){.origin = {128, 98}, .size = {14, 5}});
+          (GRect){.origin = {x_pos, y_offset + BATT_OFFSET_INSIDE_ROW_PX},
+                  .size = {CHARGING_ICON_WIDTH_PX, CHARGING_ICON_HEIGHT_PX}});
     }
   }
 
+  y_offset +=
+      SECONDS_BATT_CONN_ROW_TOTAL_HEIGHT_PX + EXTERNAL_ITEM_VERTICAL_PADDING_PX;
+
   // Draw day of week (0-7) (@ y = 107)
-  int dow_x_position = 2 + (int)((((float)day_of_week) / (6.0f)) * 128.0f);
-  draw_hex_small(ctx, day_of_week + 1, dow_x_position, 107);
+  float dow_pct_across_screen = (float)day_of_week / 6.0F;
+  int dow_x_position =
+      EXTERNAL_ITEM_HORIZONTAL_PADDING_PX +
+      (dow_pct_across_screen * SINGLE_WIDE_SMALL_DIGIT_MOVEMENT_WIDTH_PX);
+  draw_hex_small(ctx, day_of_week + 1, dow_x_position, y_offset);
   // smear_location(day_of_week + 1, ctx, dow_x_position, 107, 12, 18, 40, 2,
   //                true);
+  y_offset += SMALL_DIGIT_HEIGHT_PX + EXTERNAL_ITEM_VERTICAL_PADDING_PX;
 
   // Draw day of month (0-31) (@ y = 127)
   int dom_hex_1_val = day_of_month / HEX_DIGIT_COUNT;
   int dom_hex_2_val = day_of_month % HEX_DIGIT_COUNT;
+  float dom_pct_across_screen = ((float)day_of_month - 1) / 30.0F;
   int dom_x_position =
-      2 + (int)((((float)day_of_month - 1) / (30.0f)) * 114.0f);
-  draw_hex_small(ctx, dom_hex_1_val, dom_x_position, 127);
-  draw_hex_small(ctx, dom_hex_2_val, dom_x_position + 14, 127);
+      EXTERNAL_ITEM_HORIZONTAL_PADDING_PX +
+      (dom_pct_across_screen * DOUBLE_WIDE_SMALL_DIGIT_MOVEMENT_WIDTH_PX);
+  draw_hex_small(ctx, dom_hex_1_val, dom_x_position, y_offset);
+  draw_hex_small(ctx, dom_hex_2_val,
+                 dom_x_position + SMALL_DIGIT_WIDTH_PX +
+                     INTERNAL_ITEM_PADDING_PX,
+                 y_offset);
   // smear_location_two_wide(dom_hex_1_val, dom_hex_2_val, ctx, dom_x_position,
   //                         127, 12, 18, 2, 40, true);
+  y_offset += SMALL_DIGIT_HEIGHT_PX + EXTERNAL_ITEM_VERTICAL_PADDING_PX;
 
   // Draw month (0-11) (@ y = 147)
-  int m_x_position = 2 + (int)((((float)month) / (11.0f)) * 128.0f);
-  draw_hex_small(ctx, month + 1, m_x_position, 147);
+  float month_pct_across_screen = (float)month / 11.0F;
+  int month_x_position =
+      EXTERNAL_ITEM_HORIZONTAL_PADDING_PX +
+      (month_pct_across_screen * SINGLE_WIDE_SMALL_DIGIT_MOVEMENT_WIDTH_PX);
+  draw_hex_small(ctx, month + 1, month_x_position, y_offset);
   // smear_location(month + 1, ctx, m_x_position, 147, 12, 18, 40, 2, true);
 
   VERBOSE_LOG("layer_update_callback() complete");
