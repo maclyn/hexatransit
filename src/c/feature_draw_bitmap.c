@@ -7,6 +7,7 @@
 #include "pebble.h"
 #include <math.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 // VSCode include hacks
 
@@ -22,8 +23,12 @@
 
 #define BIG_DIGIT_WIDTH_PX 30
 #define BIG_DIGIT_HEIGHT_PX 45
+#define BIG_DIGIT_NOISE_PX_COUNT 160 // ~15%
 #define SMALL_DIGIT_WIDTH_PX 12
 #define SMALL_DIGIT_HEIGHT_PX 18
+#define SMALL_DIGIT_NOISE_PX_COUNT 27 // ~15%
+
+#define NOISE_SRC_LEN 512
 
 // Seconds - Connected - Battery
 #define SECONDS_BATT_CONN_ROW_TOTAL_HEIGHT_PX 8
@@ -85,6 +90,19 @@
 
 #define SETTINGS_KEY 1
 
+const GColor FOREGROUND_COLOR = GColorWhite;
+const GColor BACKGROUND_COLOR = GColorBlack;
+const GColor CONNECTED_INDICATOR_COLOR =
+    PBL_IF_COLOR_ELSE(GColorSunsetOrange, FOREGROUND_COLOR);
+const GColor BATTERY_COLOR =
+    PBL_IF_COLOR_ELSE(GColorMintGreen, FOREGROUND_COLOR);
+
+// R G B
+GColor HOURS_SACCADE[] = {GColorSunsetOrange, GColorFolly,
+                          GColorDarkCandyAppleRed};
+GColor MINUTES_SACCADE[] = {GColorBrightGreen, GColorGreen, GColorIslamicGreen};
+GColor DATE_SACCADE[] = {GColorCyan, GColorTiffanyBlue, GColorCobaltBlue};
+
 const int BIG_NUMBER_RESOURCE_IDS[] = {
     RESOURCE_ID_NUMBER_0, RESOURCE_ID_NUMBER_1, RESOURCE_ID_NUMBER_2,
     RESOURCE_ID_NUMBER_3, RESOURCE_ID_NUMBER_4, RESOURCE_ID_NUMBER_5,
@@ -104,6 +122,7 @@ const int SMALL_NUMBER_RESOURCE_IDS[] = {
 
 typedef struct ClaySettings {
   bool PowerMode;
+  bool ColorizeDigits;
   bool GhostTime;
   bool GhostDate;
   bool HourlyVibrate;
@@ -122,18 +141,25 @@ static GBitmap *fades_htl_sz_amnt_bmps[2][2];
 static GBitmap *charging_icon_bmp;
 static GBitmap *charging_icon_low_bmp;
 
+int rand_noise_src[NOISE_SRC_LEN]; // 16 bits * 512 = ~8KB
+
 long time_running = 0L;
 int is_charging = 0;
 bool is_connected = true;
 int battery_percent = 0;
 
 static void draw_hex_char(GContext *ctx, int value, int x, int y, int w, int h,
-                          bool is_small) {
+                          bool is_small, GColor color) {
   const GBitmap *bmp =
       is_small ? small_numerals_bmps[value] : big_numerals_bmps[value];
-  // Resources are black-on-white 1 bit PNGs, so we can use the fancy
-  // compositing modes (i.e. AssignInverted)
-  graphics_context_set_compositing_mode(ctx, GCompOpAssignInverted);
+  // TODO: Maybe set color
+
+  graphics_context_set_compositing_mode(ctx, GCompOpAssign);
+  GColor *palette = gbitmap_get_palette(bmp);
+  palette[0] = settings.ColorizeDigits
+                   ? PBL_IF_COLOR_ELSE(color, FOREGROUND_COLOR)
+                   : FOREGROUND_COLOR;
+  palette[1] = GColorClear;
   graphics_draw_bitmap_in_rect(ctx, bmp,
                                (GRect){.origin = {x, y}, .size = {w, h}});
 }
@@ -148,34 +174,50 @@ static void smear_character_at_position(GContext *ctx, int x, int y,
   graphics_context_set_compositing_mode(ctx, GCompOpSet);
   graphics_draw_bitmap_in_rect(
       ctx, smear_bmp, (GRect){.origin = {x, y}, .size = {char_w, char_h}});
+
+  // So the smear isn't uniform, draw some BACKGROUND_COLOR dots
+  // on top of it
+  int noise_dots =
+      is_small ? SMALL_DIGIT_NOISE_PX_COUNT : BIG_DIGIT_NOISE_PX_COUNT;
+  int noise_src_idx = rand();
+  graphics_context_set_stroke_color(ctx, BACKGROUND_COLOR);
+  while (noise_dots > 0) {
+    const int x_dot =
+        x + ((rand_noise_src[noise_src_idx % NOISE_SRC_LEN]) % char_w);
+    noise_src_idx++;
+    const int y_dot =
+        y + ((rand_noise_src[noise_src_idx % NOISE_SRC_LEN]) % char_h);
+    graphics_draw_pixel(ctx, (GPoint){.x = x_dot, .y = y_dot});
+    noise_src_idx++;
+    noise_dots--;
+  }
 }
 
 static void render_hex_value(GContext *ctx, int value, int x, int y,
-                             bool use_small_font) {
-
+                             bool use_small_font, GColor color) {
   const int char_w = use_small_font ? SMALL_DIGIT_WIDTH_PX : BIG_DIGIT_WIDTH_PX;
   const int char_h =
       use_small_font ? SMALL_DIGIT_HEIGHT_PX : BIG_DIGIT_HEIGHT_PX;
-  const bool is_double_wide = value > 16;
+  const bool is_double_wide = value >= 16;
   if (is_double_wide) {
     draw_hex_char(ctx, is_double_wide ? value / 16 : value, x, y, char_w,
-                  char_h, use_small_font);
+                  char_h, use_small_font, color);
     draw_hex_char(ctx, value % 16, x + char_w + INTERNAL_FONT_PADDING_PX, y,
-                  char_w, char_h, use_small_font);
+                  char_w, char_h, use_small_font, color);
   } else {
-    draw_hex_char(ctx, value, x, y, char_w, char_h, use_small_font);
+    draw_hex_char(ctx, value, x, y, char_w, char_h, use_small_font, color);
   }
 }
 
 static void render_hex_row(GContext *ctx, int value, int x, int y,
-                           bool use_small_font) {
+                           bool use_small_font, GColor (*color_saccade)[3]) {
   const int char_w = use_small_font ? SMALL_DIGIT_WIDTH_PX : BIG_DIGIT_WIDTH_PX;
-  const bool is_double_wide = value > 16;
+  const bool is_double_wide = value >= 16;
   const int total_block_w = (char_w * (is_double_wide ? 2 : 1)) +
                             (is_double_wide ? INTERNAL_FONT_PADDING_PX : 0);
 
   // First pass: the actual display value
-  render_hex_value(ctx, value, x, y, use_small_font);
+  render_hex_value(ctx, value, x, y, use_small_font, (*color_saccade)[0]);
 
   bool should_ghost = (settings.GhostDate && use_small_font) ||
                       (settings.GhostTime && !use_small_font);
@@ -191,7 +233,7 @@ static void render_hex_row(GContext *ctx, int value, int x, int y,
   for (int i = 0; i < 2; i++) {
     x -= jump_left_amount;
     bool is_extra_smeared = i > 0;
-    render_hex_value(ctx, value, x, y, use_small_font);
+    render_hex_value(ctx, value, x, y, use_small_font, (*color_saccade)[i + 1]);
     smear_character_at_position(ctx, x, y, use_small_font, is_extra_smeared);
     if (is_double_wide) {
       smear_character_at_position(ctx, x + INTERNAL_FONT_PADDING_PX + char_w, y,
@@ -222,14 +264,13 @@ static void layer_update_callback(Layer *me, GContext *ctx) {
   }
 
   // Watchface is white-on-black
-  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_context_set_fill_color(ctx, BACKGROUND_COLOR);
   graphics_fill_rect(ctx,
                      (GRect){.origin = {0, 0},
                              .size = {PBL_DISPLAY_WIDTH, PBL_DISPLAY_HEIGHT}},
                      0, GCornerNone);
 
-  graphics_context_set_fill_color(ctx, GColorWhite);
-  graphics_context_set_stroke_color(ctx, GColorWhite);
+  graphics_context_set_fill_color(ctx, FOREGROUND_COLOR);
 
   int y_offset = EXTERNAL_ITEM_VERTICAL_PADDING_PX + EXTRA_VERTICAL_PADDING_PX;
   int hour_value = hours;
@@ -242,7 +283,8 @@ static void layer_update_callback(Layer *me, GContext *ctx) {
       (hour_pct_across_screen *
        (is_24_hour_style ? DOUBLE_WIDE_BIG_DIGIT_MOVEMENT_WIDTH_PX
                          : SINGLE_WIDE_BIG_DIGIT_MOVEMENT_WIDTH_PX));
-  render_hex_row(ctx, hour_value, hour_x_position, y_offset, false);
+  render_hex_row(ctx, hour_value, hour_x_position, y_offset, false,
+                 &HOURS_SACCADE);
   y_offset += BIG_DIGIT_HEIGHT_PX + EXTERNAL_ITEM_VERTICAL_PADDING_PX;
 
   // Draw the minutes in hex
@@ -250,10 +292,12 @@ static void layer_update_callback(Layer *me, GContext *ctx) {
   int min_x_position =
       EXTERNAL_ITEM_HORIZONTAL_PADDING_PX +
       (min_pct_across_screen * DOUBLE_WIDE_BIG_DIGIT_MOVEMENT_WIDTH_PX);
-  render_hex_row(ctx, minutes, min_x_position, y_offset, false);
+  render_hex_row(ctx, minutes, min_x_position, y_offset, false,
+                 &MINUTES_SACCADE);
   y_offset += BIG_DIGIT_HEIGHT_PX + EXTERNAL_ITEM_VERTICAL_PADDING_PX;
 
   // Draw the seconds with lines
+  graphics_context_set_stroke_color(ctx, FOREGROUND_COLOR);
   int x_pos = SECONDS_BATT_CONN_ROW_LEFT_OFFSET_PX;
   int seconds_dup = seconds;
   while (seconds_dup > 0) {
@@ -268,15 +312,18 @@ static void layer_update_callback(Layer *me, GContext *ctx) {
   x_pos = SECONDS_BATT_CONN_ROW_LEFT_OFFSET_PX +
           SECONDS_INDICATOR_TOTAL_WIDTH_PX + INTERNAL_ITEM_PADDING_PX;
   if (is_connected) {
+    graphics_context_set_fill_color(ctx, CONNECTED_INDICATOR_COLOR);
     graphics_fill_rect(
         ctx,
         (GRect){.origin = {x_pos, y_offset + CONN_ICON_OFFSET_INSIDE_ROW_PX},
                 .size = {CONNECTED_ICON_W_H_PX, CONNECTED_ICON_W_H_PX}},
         1, GCornersAll);
   }
+  graphics_context_set_fill_color(ctx, FOREGROUND_COLOR);
   x_pos += (CONNECTED_ICON_W_H_PX + INTERNAL_ITEM_PADDING_PX);
 
   // Draw battery with lines
+  graphics_context_set_stroke_color(ctx, BATTERY_COLOR);
   if (!is_charging) {
     float batt_pct_across_section = (float)battery_percent / 100.0F;
     int battery_lines = (int)round(batt_pct_across_section * 5.0F);
@@ -304,34 +351,36 @@ static void layer_update_callback(Layer *me, GContext *ctx) {
                   .size = {CHARGING_ICON_WIDTH_PX, CHARGING_ICON_HEIGHT_PX}});
     }
   }
+  graphics_context_set_stroke_color(ctx, FOREGROUND_COLOR);
 
   y_offset +=
       SECONDS_BATT_CONN_ROW_TOTAL_HEIGHT_PX + EXTERNAL_ITEM_VERTICAL_PADDING_PX;
 
-  // Draw day of week (0-7) (@ y = 107)
+  // Draw day of week (0-7)
   float dow_pct_across_screen = (float)day_of_week / 6.0F;
   int dow_x_position =
       EXTERNAL_ITEM_HORIZONTAL_PADDING_PX +
       (dow_pct_across_screen * SINGLE_WIDE_SMALL_DIGIT_MOVEMENT_WIDTH_PX);
-  render_hex_row(ctx, day_of_week + 1, dow_x_position, y_offset, true);
+  render_hex_row(ctx, day_of_week + 1, dow_x_position, y_offset, true,
+                 &DATE_SACCADE);
   y_offset += SMALL_DIGIT_HEIGHT_PX + EXTERNAL_ITEM_VERTICAL_PADDING_PX;
 
-  // Draw day of month (0-31) (@ y = 127)
-  int dom_hex_1_val = day_of_month / HEX_DIGIT_COUNT;
-  int dom_hex_2_val = day_of_month % HEX_DIGIT_COUNT;
+  // Draw day of month (0-31)
   float dom_pct_across_screen = ((float)day_of_month - 1) / 30.0F;
   int dom_x_position =
       EXTERNAL_ITEM_HORIZONTAL_PADDING_PX +
       (dom_pct_across_screen * DOUBLE_WIDE_SMALL_DIGIT_MOVEMENT_WIDTH_PX);
-  render_hex_row(ctx, day_of_month, dom_x_position, y_offset, true);
+  render_hex_row(ctx, day_of_month, dom_x_position, y_offset, true,
+                 &DATE_SACCADE);
   y_offset += SMALL_DIGIT_HEIGHT_PX + EXTERNAL_ITEM_VERTICAL_PADDING_PX;
 
-  // Draw month (0-11) (@ y = 147)
+  // Draw month (0-11)
   float month_pct_across_screen = (float)month / 11.0F;
   int month_x_position =
       EXTERNAL_ITEM_HORIZONTAL_PADDING_PX +
       (month_pct_across_screen * SINGLE_WIDE_SMALL_DIGIT_MOVEMENT_WIDTH_PX);
-  render_hex_row(ctx, month + 1, month_x_position, y_offset, true);
+  render_hex_row(ctx, month + 1, month_x_position, y_offset, true,
+                 &DATE_SACCADE);
 
   VERBOSE_LOG("layer_update_callback() complete");
 }
@@ -360,6 +409,8 @@ static void inbox_received_callback(DictionaryIterator *iterator,
   VERBOSE_LOG("Inbox message received");
 
   Tuple *power_mode_tuple = dict_find(iterator, MESSAGE_KEY_PowerMode);
+  Tuple *colorize_digits_tuple =
+      dict_find(iterator, MESSAGE_KEY_ColorizeDigits);
   Tuple *ghost_time_tuple = dict_find(iterator, MESSAGE_KEY_GhostTime);
   Tuple *ghost_date_tuple = dict_find(iterator, MESSAGE_KEY_GhostDate);
   Tuple *hourly_vibrate_tuple = dict_find(iterator, MESSAGE_KEY_HourlyVibrate);
@@ -367,6 +418,9 @@ static void inbox_received_callback(DictionaryIterator *iterator,
       dict_find(iterator, MESSAGE_KEY_DisconnectVibrate);
   if (power_mode_tuple) {
     settings.PowerMode = power_mode_tuple->value->int32 == 1;
+  }
+  if (colorize_digits_tuple) {
+    settings.ColorizeDigits = colorize_digits_tuple->value->int32 == 1;
   }
   if (ghost_time_tuple) {
     settings.GhostTime = ghost_time_tuple->value->int32 == 1;
@@ -380,14 +434,24 @@ static void inbox_received_callback(DictionaryIterator *iterator,
   if (disconnect_vibrate_tuple) {
     settings.DisconnectVibrate = disconnect_vibrate_tuple->value->int32 == 1;
   }
-  if (power_mode_tuple || ghost_time_tuple || ghost_date_tuple ||
-      hourly_vibrate_tuple || disconnect_vibrate_tuple) {
+  if (power_mode_tuple || colorize_digits_tuple || ghost_time_tuple ||
+      ghost_date_tuple || hourly_vibrate_tuple || disconnect_vibrate_tuple) {
     persist_write_data(SETTINGS_KEY, &settings, sizeof(ClaySettings));
   }
 }
 
 static void inbox_dropped_callback(AppMessageResult reason, void *context) {
   APP_LOG(APP_LOG_LEVEL_ERROR, "Inbox message dropped: %d", (int)reason);
+}
+
+static GBitmap *load_resource_with_fg_color(int res_id, GColor color) {
+  GBitmap *res_bmp = gbitmap_create_with_resource(res_id);
+  GBitmap *bmp_copy = gbitmap_create_palettized_from_1bit(res_bmp);
+  GColor *palette = gbitmap_get_palette(bmp_copy);
+  palette[0] = GColorClear;
+  palette[1] = color;
+  gbitmap_destroy(res_bmp);
+  return bmp_copy;
 }
 
 void init() {
@@ -405,6 +469,7 @@ void init() {
 
   // Defaults, matching config.js
   settings.PowerMode = true;
+  settings.ColorizeDigits = true;
   settings.GhostTime = true;
   settings.GhostDate = true;
   settings.HourlyVibrate = true;
@@ -423,38 +488,28 @@ void init() {
   layer_add_child(window_layer, layer);
 
   for (int i = 0; i < HEX_DIGIT_COUNT; i++) {
-    big_numerals_bmps[i] =
-        gbitmap_create_with_resource(BIG_NUMBER_RESOURCE_IDS[i]);
-    small_numerals_bmps[i] =
-        gbitmap_create_with_resource(SMALL_NUMBER_RESOURCE_IDS[i]);
+    big_numerals_bmps[i] = load_resource_with_fg_color(
+        BIG_NUMBER_RESOURCE_IDS[i], FOREGROUND_COLOR);
+    small_numerals_bmps[i] = load_resource_with_fg_color(
+        SMALL_NUMBER_RESOURCE_IDS[i], FOREGROUND_COLOR);
   }
   charging_icon_bmp = gbitmap_create_with_resource(RESOURCE_ID_CHARGING_ICON);
   charging_icon_low_bmp =
       gbitmap_create_with_resource(RESOURCE_ID_CHARGING_ICON_LOW);
   fades_htl_sz_amnt_bmps[0][0] =
-      gbitmap_create_with_resource(RESOURCE_ID_SMEAR_25);
+      load_resource_with_fg_color(RESOURCE_ID_SMEAR_25, BACKGROUND_COLOR);
   fades_htl_sz_amnt_bmps[0][1] =
-      gbitmap_create_with_resource(RESOURCE_ID_SMEAR_125);
+      load_resource_with_fg_color(RESOURCE_ID_SMEAR_125, BACKGROUND_COLOR);
   fades_htl_sz_amnt_bmps[1][0] =
-      gbitmap_create_with_resource(RESOURCE_ID_SMEAR_SMALL_25);
-  fades_htl_sz_amnt_bmps[1][1] =
-      gbitmap_create_with_resource(RESOURCE_ID_SMEAR_SMALL_125);
-  for (int i = 0; i < 2; i++) {
-    for (int j = 0; j < 2; j++) {
-      GBitmap *res_bmp = fades_htl_sz_amnt_bmps[i][j];
-      // gbitmap_create_blank_with_palette(GSize size, GBitmapFormat format,
-      // GColor *palette, bool free_on_destroy)
-      GBitmap *bmp_copy = gbitmap_create_palettized_from_1bit(res_bmp);
-      fades_htl_sz_amnt_bmps[i][j] = bmp_copy;
-      GColor *palette = gbitmap_get_palette(bmp_copy);
-      palette[0] = GColorClear;
-      palette[1] = GColorBlack;
-      // gbitmap_set_palette(bmp_copy, SMEAR_PALETTE, false);
-      gbitmap_destroy(res_bmp);
-    }
+      load_resource_with_fg_color(RESOURCE_ID_SMEAR_SMALL_25, BACKGROUND_COLOR);
+  fades_htl_sz_amnt_bmps[1][1] = load_resource_with_fg_color(
+      RESOURCE_ID_SMEAR_SMALL_125, BACKGROUND_COLOR);
+
+  for (int i = 0; i < NOISE_SRC_LEN; i++) {
+    rand_noise_src[i] = rand();
   }
 
-  VERBOSE_LOG("init'd windows + all resources");
+  VERBOSE_LOG("Init'd all resources");
 
   srand(time(NULL));
 

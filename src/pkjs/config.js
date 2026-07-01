@@ -22,6 +22,12 @@ module.exports = [
             },
             {
                 "type": "toggle",
+                "messageKey": "ColorizeDigits",
+                "label": "Colorize the digits in an RGB color scheme on color devices",
+                "defaultValue": true
+            },
+            {
+                "type": "toggle",
                 "messageKey": "GhostTime",
                 "label": "Ghost trails for time (uses more power)",
                 "defaultValue": true
