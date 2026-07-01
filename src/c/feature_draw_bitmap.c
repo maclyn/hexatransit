@@ -5,6 +5,8 @@
 
 #include "common.h"
 #include "pebble.h"
+#include <math.h>
+#include <stdbool.h>
 
 // VSCode include hacks
 
@@ -27,14 +29,18 @@
 #define SECONDS_BATT_CONN_ROW_TOTAL_HEIGHT_PX 8
 #define SECONDS_INDICATOR_HEIGHT_PX SECONDS_BATT_CONN_ROW_TOTAL_HEIGHT_PX
 #define SECONDS_INDICATOR_WIDTH_PX 1
-#define SECONDS_INDICATOR_INTERNAL_PADDING_W_PX 1
+#define SECONDS_INDICATOR_INTERNAL_PADDING_W_PX                                \
+  (PBL_PLATFORM_TYPE_CURRENT == PlatformTypeEmery ? 2 : 1)
+#define SECONDS_INDICATOR_TOTAL_WIDTH_PX                                       \
+  ((SECONDS_INDICATOR_WIDTH_PX * 60) +                                         \
+   (SECONDS_INDICATOR_INTERNAL_PADDING_W_PX * 59))
 #define CONNECTED_ICON_W_H_PX 3
 #define CONN_ICON_OFFSET_INSIDE_ROW_PX                                         \
-  ((SECONDS_BATT_CONN_ROW_TOTAL_HEIGHT_PX - CONNECTED_ICON_W_H_PX) / 2)
+  ((SECONDS_BATT_CONN_ROW_TOTAL_HEIGHT_PX - CONNECTED_ICON_W_H_PX) / 2) + 1
 #define BATTERY_BAR_WIDTH_PX 1
 #define BATTERY_BAR_HEIGHT_PX 4
 #define BATTERY_BAR_INTERNAL_PADDING_W_PX 1
-#define CHARGING_ICON_WIDTH_PX 14
+#define CHARGING_ICON_WIDTH_PX 9
 #define CHARGING_ICON_HEIGHT_PX 5
 #define BATT_OFFSET_INSIDE_ROW_PX                                              \
   ((SECONDS_BATT_CONN_ROW_TOTAL_HEIGHT_PX - BATTERY_BAR_HEIGHT_PX) / 2)
@@ -51,27 +57,29 @@
    SECONDS_INDICATOR_HEIGHT_PX) // (45 * 2) + (18 * 3) + 8 = 152
 #define EXTERNAL_PADDING_TOTAL_PX (PBL_DISPLAY_HEIGHT - CONTENT_TOTAL_HEIGHT_PX)
 #define INTERNAL_ITEM_PADDING_PX 2
-#define EXTERNAL_ITEM_HORIZONTAL_PADDING_PX 2
+#define INTERNAL_FONT_PADDING_PX 4
+#define EXTERNAL_ITEM_HORIZONTAL_PADDING_PX                                    \
+  (PBL_PLATFORM_TYPE_CURRENT == PlatformTypeEmery ? 8 : 2)
 #define EXTERNAL_ITEM_VERTICAL_PADDING_PX                                      \
   (EXTERNAL_PADDING_TOTAL_PX / (ROWS_OF_CONTENT + 2))
 // EXTERNAL_ITEM_PADDING_PX resolves to 9.5 on PT2, integer rounding down to 9
 // This "throws out" (.5 * 8) pixels that we have to account for, so we pad in
-// an extra 2 pixels on top
+// an extra 5 pixels on top
 // On everything else, it resolves to 2
 #define EXTRA_VERTICAL_PADDING_PX                                              \
-  (PBL_PLATFORM_TYPE_CURRENT == PlatformTypeEmery ? 2 : 0)
+  (PBL_PLATFORM_TYPE_CURRENT == PlatformTypeEmery ? 5 : 0)
 #define HORIZONTAL_TRACK_WIDTH_PX                                              \
   (PBL_DISPLAY_WIDTH - (2 * EXTERNAL_ITEM_HORIZONTAL_PADDING_PX))
 #define SINGLE_WIDE_BIG_DIGIT_MOVEMENT_WIDTH_PX                                \
   (HORIZONTAL_TRACK_WIDTH_PX - BIG_DIGIT_WIDTH_PX)
 #define DOUBLE_WIDE_BIG_DIGIT_MOVEMENT_WIDTH_PX                                \
   (HORIZONTAL_TRACK_WIDTH_PX - (BIG_DIGIT_WIDTH_PX * 2) -                      \
-   INTERNAL_ITEM_PADDING_PX)
+   INTERNAL_FONT_PADDING_PX)
 #define SINGLE_WIDE_SMALL_DIGIT_MOVEMENT_WIDTH_PX                              \
   (HORIZONTAL_TRACK_WIDTH_PX - SMALL_DIGIT_WIDTH_PX)
 #define DOUBLE_WIDE_SMALL_DIGIT_MOVEMENT_WIDTH_PX                              \
   (HORIZONTAL_TRACK_WIDTH_PX - (SMALL_DIGIT_WIDTH_PX * 2) -                    \
-   INTERNAL_ITEM_PADDING_PX)
+   INTERNAL_FONT_PADDING_PX)
 
 #define HEX_DIGIT_COUNT 16
 
@@ -119,26 +127,77 @@ int is_charging = 0;
 bool is_connected = true;
 int battery_percent = 0;
 
-static void draw_hex(int value, bool is_small, GContext *ctx, int x, int y,
-                     int w, int h) {
+static void draw_hex_char(GContext *ctx, int value, int x, int y, int w, int h,
+                          bool is_small) {
   const GBitmap *bmp =
       is_small ? small_numerals_bmps[value] : big_numerals_bmps[value];
+  // Resources are black-on-white 1 bit PNGs, so we can use the fancy
+  // compositing modes (i.e. AssignInverted)
+  graphics_context_set_compositing_mode(ctx, GCompOpAssignInverted);
   graphics_draw_bitmap_in_rect(ctx, bmp,
                                (GRect){.origin = {x, y}, .size = {w, h}});
 }
 
-static void draw_hex_small(GContext *ctx, int value, int x, int y) {
-  draw_hex(value, true, ctx, x, y, SMALL_DIGIT_WIDTH_PX, SMALL_DIGIT_HEIGHT_PX);
+static void smear_character_at_position(GContext *ctx, int x, int y,
+                                        bool is_small, bool is_more_smeared) {
+  const int char_w = is_small ? SMALL_DIGIT_WIDTH_PX : BIG_DIGIT_WIDTH_PX;
+  const int char_h = is_small ? SMALL_DIGIT_HEIGHT_PX : BIG_DIGIT_HEIGHT_PX;
+  GBitmap *smear_bmp =
+      fades_htl_sz_amnt_bmps[is_small ? 1 : 0][is_more_smeared ? 1 : 0];
+  // smear_bmp is a palettized 1 bit BMP
+  graphics_context_set_compositing_mode(ctx, GCompOpSet);
+  graphics_draw_bitmap_in_rect(
+      ctx, smear_bmp, (GRect){.origin = {x, y}, .size = {char_w, char_h}});
 }
 
-static void draw_hex_big(GContext *ctx, int value, int x, int y) {
-  draw_hex(value, false, ctx, x, y, BIG_DIGIT_WIDTH_PX, BIG_DIGIT_HEIGHT_PX);
+static void render_hex_value(GContext *ctx, int value, int x, int y,
+                             bool use_small_font) {
+
+  const int char_w = use_small_font ? SMALL_DIGIT_WIDTH_PX : BIG_DIGIT_WIDTH_PX;
+  const int char_h =
+      use_small_font ? SMALL_DIGIT_HEIGHT_PX : BIG_DIGIT_HEIGHT_PX;
+  const bool is_double_wide = value > 16;
+  if (is_double_wide) {
+    draw_hex_char(ctx, is_double_wide ? value / 16 : value, x, y, char_w,
+                  char_h, use_small_font);
+    draw_hex_char(ctx, value % 16, x + char_w + INTERNAL_FONT_PADDING_PX, y,
+                  char_w, char_h, use_small_font);
+  } else {
+    draw_hex_char(ctx, value, x, y, char_w, char_h, use_small_font);
+  }
 }
 
-static void smear_left_from_location(int x, int y, bool is_double_wide,
-                                     bool is_small) {
+static void render_hex_row(GContext *ctx, int value, int x, int y,
+                           bool use_small_font) {
+  const int char_w = use_small_font ? SMALL_DIGIT_WIDTH_PX : BIG_DIGIT_WIDTH_PX;
+  const bool is_double_wide = value > 16;
+  const int total_block_w = (char_w * (is_double_wide ? 2 : 1)) +
+                            (is_double_wide ? INTERNAL_FONT_PADDING_PX : 0);
 
-  // TODO
+  // First pass: the actual display value
+  render_hex_value(ctx, value, x, y, use_small_font);
+
+  bool should_ghost = (settings.GhostDate && use_small_font) ||
+                      (settings.GhostTime && !use_small_font);
+  if (!should_ghost) {
+    return;
+  }
+
+  // Second, third pass: jump to the left, clear out 50%, 75%
+  // VERBOSE_LOG("for is_dw=%d is_small=%d total_block_w=%d",
+  // (int)is_double_wide,
+  //             (int)use_small_font, total_block_w);
+  const int jump_left_amount = total_block_w + INTERNAL_FONT_PADDING_PX;
+  for (int i = 0; i < 2; i++) {
+    x -= jump_left_amount;
+    bool is_extra_smeared = i > 0;
+    render_hex_value(ctx, value, x, y, use_small_font);
+    smear_character_at_position(ctx, x, y, use_small_font, is_extra_smeared);
+    if (is_double_wide) {
+      smear_character_at_position(ctx, x + INTERNAL_FONT_PADDING_PX + char_w, y,
+                                  use_small_font, is_extra_smeared);
+    }
+  }
 }
 
 static void layer_update_callback(Layer *me, GContext *ctx) {
@@ -154,6 +213,7 @@ static void layer_update_callback(Layer *me, GContext *ctx) {
   int month = curr_time->tm_mon;
   int day_of_month = curr_time->tm_mday;
   int day_of_week = curr_time->tm_wday;
+  bool is_24_hour_style = clock_is_24h_style();
 
   VERBOSE_LOG("Time is: %d:%d:%d", hours, minutes, seconds);
 
@@ -161,39 +221,36 @@ static void layer_update_callback(Layer *me, GContext *ctx) {
     vibes_long_pulse();
   }
 
-  // Draw the hours in hex
-  // Always renders in 12 hour time
-  int hour_value = hours;
-  if (hour_value > 11) {
-    hour_value -= 12;
-  }
+  // Watchface is white-on-black
+  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_fill_rect(ctx,
+                     (GRect){.origin = {0, 0},
+                             .size = {PBL_DISPLAY_WIDTH, PBL_DISPLAY_HEIGHT}},
+                     0, GCornerNone);
+
+  graphics_context_set_fill_color(ctx, GColorWhite);
+  graphics_context_set_stroke_color(ctx, GColorWhite);
 
   int y_offset = EXTERNAL_ITEM_VERTICAL_PADDING_PX + EXTRA_VERTICAL_PADDING_PX;
-
+  int hour_value = hours;
+  if (!is_24_hour_style && hour_value > 11) {
+    hour_value -= 12;
+  }
   float hour_pct_across_screen = (float)hours / 23.0F;
   int hour_x_position =
       EXTERNAL_ITEM_HORIZONTAL_PADDING_PX +
-      (hour_pct_across_screen * SINGLE_WIDE_BIG_DIGIT_MOVEMENT_WIDTH_PX);
-  draw_hex_big(ctx, hour_value, hour_x_position, y_offset);
-  // smear_location(hour_value, ctx, hour_x_position, edge_padding,
-  //                BIG_DIGIT_WIDTH_PX, BIG_DIGIT_HEIGHT_PX, 200, edge_padding,
-  //                false);
+      (hour_pct_across_screen *
+       (is_24_hour_style ? DOUBLE_WIDE_BIG_DIGIT_MOVEMENT_WIDTH_PX
+                         : SINGLE_WIDE_BIG_DIGIT_MOVEMENT_WIDTH_PX));
+  render_hex_row(ctx, hour_value, hour_x_position, y_offset, false);
   y_offset += BIG_DIGIT_HEIGHT_PX + EXTERNAL_ITEM_VERTICAL_PADDING_PX;
 
   // Draw the minutes in hex
-  int first_hex_digit = minutes / HEX_DIGIT_COUNT;
-  int second_hex_digit = minutes % HEX_DIGIT_COUNT;
   float min_pct_across_screen = (float)minutes / 60.0F;
   int min_x_position =
       EXTERNAL_ITEM_HORIZONTAL_PADDING_PX +
       (min_pct_across_screen * DOUBLE_WIDE_BIG_DIGIT_MOVEMENT_WIDTH_PX);
-  draw_hex_big(ctx, first_hex_digit, min_x_position, y_offset);
-  draw_hex_big(ctx, second_hex_digit,
-               min_x_position + BIG_DIGIT_WIDTH_PX + INTERNAL_ITEM_PADDING_PX,
-               y_offset);
-  // smear_location_two_wide(first_hex_digit, second_hex_digit, ctx,
-  //                         min_x_position, 49, BIG_DIGIT_WIDTH_PX,
-  //                         BIG_DIGIT_HEIGHT_PX, 2, 200, false);
+  render_hex_row(ctx, minutes, min_x_position, y_offset, false);
   y_offset += BIG_DIGIT_HEIGHT_PX + EXTERNAL_ITEM_VERTICAL_PADDING_PX;
 
   // Draw the seconds with lines
@@ -207,21 +264,22 @@ static void layer_update_callback(Layer *me, GContext *ctx) {
     seconds_dup--;
   }
 
-  // Draw divider between seconds/battery (only if connected)
-  x_pos += INTERNAL_ITEM_PADDING_PX;
+  // Draw dot between seconds/battery (only if connected)
+  x_pos = SECONDS_BATT_CONN_ROW_LEFT_OFFSET_PX +
+          SECONDS_INDICATOR_TOTAL_WIDTH_PX + INTERNAL_ITEM_PADDING_PX;
   if (is_connected) {
     graphics_fill_rect(
         ctx,
         (GRect){.origin = {x_pos, y_offset + CONN_ICON_OFFSET_INSIDE_ROW_PX},
                 .size = {CONNECTED_ICON_W_H_PX, CONNECTED_ICON_W_H_PX}},
-        0, GCornerNone);
+        1, GCornersAll);
   }
   x_pos += (CONNECTED_ICON_W_H_PX + INTERNAL_ITEM_PADDING_PX);
 
   // Draw battery with lines
   if (!is_charging) {
     float batt_pct_across_section = (float)battery_percent / 100.0F;
-    int battery_lines = (int)(batt_pct_across_section * 7.0F);
+    int battery_lines = (int)round(batt_pct_across_section * 5.0F);
     int battery_x_pos = x_pos;
     while (battery_lines > 0) {
       graphics_draw_line(
@@ -233,6 +291,7 @@ static void layer_update_callback(Layer *me, GContext *ctx) {
       battery_lines--;
     }
   } else { // Draw charging image
+    graphics_context_set_compositing_mode(ctx, GCompOpAssignInverted);
     if (seconds % 2) {
       graphics_draw_bitmap_in_rect(
           ctx, charging_icon_low_bmp,
@@ -254,9 +313,7 @@ static void layer_update_callback(Layer *me, GContext *ctx) {
   int dow_x_position =
       EXTERNAL_ITEM_HORIZONTAL_PADDING_PX +
       (dow_pct_across_screen * SINGLE_WIDE_SMALL_DIGIT_MOVEMENT_WIDTH_PX);
-  draw_hex_small(ctx, day_of_week + 1, dow_x_position, y_offset);
-  // smear_location(day_of_week + 1, ctx, dow_x_position, 107, 12, 18, 40, 2,
-  //                true);
+  render_hex_row(ctx, day_of_week + 1, dow_x_position, y_offset, true);
   y_offset += SMALL_DIGIT_HEIGHT_PX + EXTERNAL_ITEM_VERTICAL_PADDING_PX;
 
   // Draw day of month (0-31) (@ y = 127)
@@ -266,13 +323,7 @@ static void layer_update_callback(Layer *me, GContext *ctx) {
   int dom_x_position =
       EXTERNAL_ITEM_HORIZONTAL_PADDING_PX +
       (dom_pct_across_screen * DOUBLE_WIDE_SMALL_DIGIT_MOVEMENT_WIDTH_PX);
-  draw_hex_small(ctx, dom_hex_1_val, dom_x_position, y_offset);
-  draw_hex_small(ctx, dom_hex_2_val,
-                 dom_x_position + SMALL_DIGIT_WIDTH_PX +
-                     INTERNAL_ITEM_PADDING_PX,
-                 y_offset);
-  // smear_location_two_wide(dom_hex_1_val, dom_hex_2_val, ctx, dom_x_position,
-  //                         127, 12, 18, 2, 40, true);
+  render_hex_row(ctx, day_of_month, dom_x_position, y_offset, true);
   y_offset += SMALL_DIGIT_HEIGHT_PX + EXTERNAL_ITEM_VERTICAL_PADDING_PX;
 
   // Draw month (0-11) (@ y = 147)
@@ -280,8 +331,7 @@ static void layer_update_callback(Layer *me, GContext *ctx) {
   int month_x_position =
       EXTERNAL_ITEM_HORIZONTAL_PADDING_PX +
       (month_pct_across_screen * SINGLE_WIDE_SMALL_DIGIT_MOVEMENT_WIDTH_PX);
-  draw_hex_small(ctx, month + 1, month_x_position, y_offset);
-  // smear_location(month + 1, ctx, m_x_position, 147, 12, 18, 40, 2, true);
+  render_hex_row(ctx, month + 1, month_x_position, y_offset, true);
 
   VERBOSE_LOG("layer_update_callback() complete");
 }
@@ -382,13 +432,27 @@ void init() {
   charging_icon_low_bmp =
       gbitmap_create_with_resource(RESOURCE_ID_CHARGING_ICON_LOW);
   fades_htl_sz_amnt_bmps[0][0] =
-      gbitmap_create_with_resource(RESOURCE_ID_SMEAR_50);
-  fades_htl_sz_amnt_bmps[0][1] =
       gbitmap_create_with_resource(RESOURCE_ID_SMEAR_25);
+  fades_htl_sz_amnt_bmps[0][1] =
+      gbitmap_create_with_resource(RESOURCE_ID_SMEAR_125);
   fades_htl_sz_amnt_bmps[1][0] =
-      gbitmap_create_with_resource(RESOURCE_ID_SMEAR_SMALL_50);
-  fades_htl_sz_amnt_bmps[1][1] =
       gbitmap_create_with_resource(RESOURCE_ID_SMEAR_SMALL_25);
+  fades_htl_sz_amnt_bmps[1][1] =
+      gbitmap_create_with_resource(RESOURCE_ID_SMEAR_SMALL_125);
+  for (int i = 0; i < 2; i++) {
+    for (int j = 0; j < 2; j++) {
+      GBitmap *res_bmp = fades_htl_sz_amnt_bmps[i][j];
+      // gbitmap_create_blank_with_palette(GSize size, GBitmapFormat format,
+      // GColor *palette, bool free_on_destroy)
+      GBitmap *bmp_copy = gbitmap_create_palettized_from_1bit(res_bmp);
+      fades_htl_sz_amnt_bmps[i][j] = bmp_copy;
+      GColor *palette = gbitmap_get_palette(bmp_copy);
+      palette[0] = GColorClear;
+      palette[1] = GColorBlack;
+      // gbitmap_set_palette(bmp_copy, SMEAR_PALETTE, false);
+      gbitmap_destroy(res_bmp);
+    }
+  }
 
   VERBOSE_LOG("init'd windows + all resources");
 
