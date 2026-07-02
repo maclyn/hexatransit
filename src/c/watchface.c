@@ -351,16 +351,18 @@ static void layer_update_callback(Layer *me, GContext *ctx) {
   graphics_context_set_fill_color(ctx, FOREGROUND_COLOR);
 
   int y_offset = EXTERNAL_ITEM_VERTICAL_PADDING_PX + EXTRA_VERTICAL_PADDING_PX;
+
+  // Draw hours in hex
   int hour_value = hours;
   if (!is_24_hour_style && hour_value > 11) {
     hour_value -= 12;
   }
   float hour_pct_across_screen = (float)hours / 23.0F;
-  int hour_x_position =
-      EXTERNAL_ITEM_HORIZONTAL_PADDING_PX +
-      (hour_pct_across_screen *
-       (is_24_hour_style ? DOUBLE_WIDE_BIG_DIGIT_MOVEMENT_WIDTH_PX
-                         : SINGLE_WIDE_BIG_DIGIT_MOVEMENT_WIDTH_PX));
+  int hour_x_position = EXTERNAL_ITEM_HORIZONTAL_PADDING_PX +
+                        (hour_pct_across_screen *
+                         (is_24_hour_style || !settings.HexMode
+                              ? DOUBLE_WIDE_BIG_DIGIT_MOVEMENT_WIDTH_PX
+                              : SINGLE_WIDE_BIG_DIGIT_MOVEMENT_WIDTH_PX));
   render_hex_row(ctx, hour_value, hour_x_position, y_offset, false,
                  HOUR_OF_DAY);
   y_offset += BIG_DIGIT_HEIGHT_PX + EXTERNAL_ITEM_VERTICAL_PADDING_PX;
