@@ -13,6 +13,7 @@
         "enableMultiJS": true,
         "messageKeys": [
             "PowerMode",
+            "HexMode",
             "ColorizeDigits",
             "GhostTime",
             "GhostDate",
@@ -78,110 +79,8 @@
                     "memoryFormat": "1Bit"
                 },
                 {
-                    "file": "images/D.png",
-                    "name": "NUMBER_D",
-                    "type": "bitmap",
-                    "memoryFormat": "1Bit"
-                },
-                {
-                    "file": "images/C.png",
-                    "name": "NUMBER_C",
-                    "type": "bitmap",
-                    "memoryFormat": "1Bit"
-                },
-                {
-                    "file": "images/B.png",
-                    "name": "NUMBER_B",
-                    "type": "bitmap",
-                    "memoryFormat": "1Bit"
-                },
-                {
-                    "file": "images/A.png",
-                    "name": "NUMBER_A",
-                    "type": "bitmap",
-                    "memoryFormat": "1Bit"
-                },
-                {
-                    "file": "images/9.png",
-                    "name": "NUMBER_9",
-                    "type": "bitmap",
-                    "memoryFormat": "1Bit"
-                },
-                {
-                    "file": "images/SMALL_F.png",
-                    "name": "SMALL_NUMBER_F",
-                    "type": "bitmap",
-                    "memoryFormat": "1Bit"
-                },
-                {
-                    "file": "images/8.png",
-                    "name": "NUMBER_8",
-                    "type": "bitmap",
-                    "memoryFormat": "1Bit"
-                },
-                {
-                    "file": "images/SMALL_E.png",
-                    "name": "SMALL_NUMBER_E",
-                    "type": "bitmap",
-                    "memoryFormat": "1Bit"
-                },
-                {
-                    "file": "images/7.png",
-                    "name": "NUMBER_7",
-                    "type": "bitmap",
-                    "memoryFormat": "1Bit"
-                },
-                {
-                    "file": "images/SMALL_D.png",
-                    "name": "SMALL_NUMBER_D",
-                    "type": "bitmap",
-                    "memoryFormat": "1Bit"
-                },
-                {
-                    "file": "images/6.png",
-                    "name": "NUMBER_6",
-                    "type": "bitmap",
-                    "memoryFormat": "1Bit"
-                },
-                {
-                    "file": "images/SMALL_C.png",
-                    "name": "SMALL_NUMBER_C",
-                    "type": "bitmap",
-                    "memoryFormat": "1Bit"
-                },
-                {
-                    "file": "images/5.png",
-                    "name": "NUMBER_5",
-                    "type": "bitmap",
-                    "memoryFormat": "1Bit"
-                },
-                {
-                    "file": "images/SMALL_B.png",
-                    "name": "SMALL_NUMBER_B",
-                    "type": "bitmap",
-                    "memoryFormat": "1Bit"
-                },
-                {
-                    "file": "images/4.png",
-                    "name": "NUMBER_4",
-                    "type": "bitmap",
-                    "memoryFormat": "1Bit"
-                },
-                {
-                    "file": "images/SMALL_8.png",
-                    "name": "SMALL_NUMBER_8",
-                    "type": "bitmap",
-                    "memoryFormat": "1Bit"
-                },
-                {
-                    "file": "images/2.png",
-                    "name": "NUMBER_2",
-                    "type": "bitmap",
-                    "memoryFormat": "1Bit"
-                },
-                {
-                    "file": "images/SMALL_9.png",
-                    "name": "SMALL_NUMBER_9",
+                    "file": "images/0.png",
+                    "name": "NUMBER_0",
                     "type": "bitmap",
                     "memoryFormat": "1Bit"
                 },
@@ -192,62 +91,74 @@
                     "memoryFormat": "1Bit"
                 },
                 {
-                    "file": "images/0.png",
-                    "name": "NUMBER_0",
+                    "file": "images/2.png",
+                    "name": "NUMBER_2",
                     "type": "bitmap",
                     "memoryFormat": "1Bit"
                 },
                 {
-                    "file": "images/SMALL_7.png",
-                    "name": "SMALL_NUMBER_7",
+                    "file": "images/3.png",
+                    "name": "NUMBER_3",
                     "type": "bitmap",
                     "memoryFormat": "1Bit"
                 },
                 {
-                    "file": "images/SMALL_6.png",
-                    "name": "SMALL_NUMBER_6",
+                    "file": "images/4.png",
+                    "name": "NUMBER_4",
                     "type": "bitmap",
                     "memoryFormat": "1Bit"
                 },
                 {
-                    "file": "images/SMALL_5.png",
-                    "name": "SMALL_NUMBER_5",
+                    "file": "images/5.png",
+                    "name": "NUMBER_5",
                     "type": "bitmap",
                     "memoryFormat": "1Bit"
                 },
                 {
-                    "file": "images/SMALL_4.png",
-                    "name": "SMALL_NUMBER_4",
+                    "file": "images/6.png",
+                    "name": "NUMBER_6",
                     "type": "bitmap",
                     "memoryFormat": "1Bit"
                 },
                 {
-                    "file": "images/SMALL_3.png",
-                    "name": "SMALL_NUMBER_3",
+                    "file": "images/7.png",
+                    "name": "NUMBER_7",
                     "type": "bitmap",
                     "memoryFormat": "1Bit"
                 },
                 {
-                    "file": "images/SMALL_2.png",
-                    "name": "SMALL_NUMBER_2",
+                    "file": "images/8.png",
+                    "name": "NUMBER_8",
                     "type": "bitmap",
                     "memoryFormat": "1Bit"
                 },
                 {
-                    "file": "images/SMALL_1.png",
-                    "name": "SMALL_NUMBER_1",
+                    "file": "images/9.png",
+                    "name": "NUMBER_9",
                     "type": "bitmap",
                     "memoryFormat": "1Bit"
                 },
                 {
-                    "file": "images/SMALL_0.png",
-                    "name": "SMALL_NUMBER_0",
+                    "file": "images/A.png",
+                    "name": "NUMBER_A",
                     "type": "bitmap",
                     "memoryFormat": "1Bit"
                 },
                 {
-                    "file": "images/F.png",
-                    "name": "NUMBER_F",
+                    "file": "images/B.png",
+                    "name": "NUMBER_B",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/C.png",
+                    "name": "NUMBER_C",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/D.png",
+                    "name": "NUMBER_D",
                     "type": "bitmap",
                     "memoryFormat": "1Bit"
                 },
@@ -258,14 +169,152 @@
                     "memoryFormat": "1Bit"
                 },
                 {
+                    "file": "images/F.png",
+                    "name": "NUMBER_F",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/SMALL_0.png",
+                    "name": "SMALL_NUMBER_0",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/SMALL_1.png",
+                    "name": "SMALL_NUMBER_1",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/SMALL_2.png",
+                    "name": "SMALL_NUMBER_2",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/SMALL_3.png",
+                    "name": "SMALL_NUMBER_3",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/SMALL_4.png",
+                    "name": "SMALL_NUMBER_4",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/SMALL_5.png",
+                    "name": "SMALL_NUMBER_5",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/SMALL_6.png",
+                    "name": "SMALL_NUMBER_6",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/SMALL_7.png",
+                    "name": "SMALL_NUMBER_7",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/SMALL_8.png",
+                    "name": "SMALL_NUMBER_8",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/SMALL_9.png",
+                    "name": "SMALL_NUMBER_9",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
                     "file": "images/SMALL_A.png",
                     "name": "SMALL_NUMBER_A",
                     "type": "bitmap",
                     "memoryFormat": "1Bit"
                 },
                 {
-                    "file": "images/3.png",
-                    "name": "NUMBER_3",
+                    "file": "images/SMALL_B.png",
+                    "name": "SMALL_NUMBER_B",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/SMALL_C.png",
+                    "name": "SMALL_NUMBER_C",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/SMALL_D.png",
+                    "name": "SMALL_NUMBER_D",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/SMALL_E.png",
+                    "name": "SMALL_NUMBER_E",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/SMALL_F.png",
+                    "name": "SMALL_NUMBER_F",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/SMALL_H.png",
+                    "name": "SMALL_NUMBER_H",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/SMALL_M.png",
+                    "name": "SMALL_NUMBER_M",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/SMALL_O.png",
+                    "name": "SMALL_NUMBER_O",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/SMALL_S.png",
+                    "name": "SMALL_NUMBER_S",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/SMALL_T.png",
+                    "name": "SMALL_NUMBER_T",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/SMALL_U.png",
+                    "name": "SMALL_NUMBER_U",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/SMALL_R.png",
+                    "name": "SMALL_NUMBER_R",
+                    "type": "bitmap",
+                    "memoryFormat": "1Bit"
+                },
+                {
+                    "file": "images/SMALL_W.png",
+                    "name": "SMALL_NUMBER_W",
                     "type": "bitmap",
                     "memoryFormat": "1Bit"
                 }

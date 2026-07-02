@@ -16,6 +16,12 @@ module.exports = [
             },
             {
                 "type": "toggle",
+                "messageKey": "HexMode",
+                "label": "Show time and date in hexadecimal (base 16)",
+                "defaultValue": true
+            },
+            {
+                "type": "toggle",
                 "messageKey": "PowerMode",
                 "label": "High (update every second) or low (update every 15 seconds) power use mode",
                 "defaultValue": true
