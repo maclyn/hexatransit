@@ -1,7 +1,6 @@
-// Minimally updated version of a smartwatch I built while I was a student
-// Some questionable stuff here! Only what's necessary to ACTUALLY get this
-// building and working again in 2026 has been changed with modifications
-// to stretch to Pebble Time 2. Be warned.
+// Minimally updated version of a smartwatch I built when I was a student
+// Be warned: Some questionable stuff here! Everything egregious was fixed,
+// but it still isn't exactly the height of clean code
 
 #include "common.h"
 #include "pebble.h"
@@ -552,11 +551,12 @@ void init() {
   // Defaults, matching config.js
   settings.HexMode = true;
   settings.PowerMode = true;
-  settings.ColorizeDigits = true;
+  settings.ColorizeDigits = false;
   settings.GhostTime = true;
-  settings.GhostDate = true;
-  settings.HourlyVibrate = true;
+  settings.GhostDate = false;
+  settings.HourlyVibrate = false;
   settings.DisconnectVibrate = true;
+  // If more keys were added post-release, this would need to be updated
   if (persist_read_data(SETTINGS_KEY, &settings, sizeof(settings)) ==
       E_DOES_NOT_EXIST) {
     APP_LOG(APP_LOG_LEVEL_ERROR, "Failed to read settings! Writing defaults");
@@ -630,8 +630,9 @@ void deinit() {
   gbitmap_destroy(charging_icon_bmp);
   gbitmap_destroy(charging_icon_low_bmp);
 
-  window_destroy(window);
+  layer_remove_child_layers(window_layer);
   layer_destroy(layer);
+  window_destroy(window);
 }
 
 int main(void) {

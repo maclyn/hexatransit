@@ -23,14 +23,14 @@ module.exports = [
             {
                 "type": "toggle",
                 "messageKey": "PowerMode",
-                "label": "High (update every second) or low (update every 15 seconds) power use mode",
+                "label": "High (update every second) or low (update every 15 seconds) power mode",
                 "defaultValue": true
             },
             {
                 "type": "toggle",
                 "messageKey": "ColorizeDigits",
                 "label": "Colorize the digits in an RGB color scheme on color devices",
-                "defaultValue": true
+                "defaultValue": false
             },
             {
                 "type": "toggle",
@@ -42,13 +42,13 @@ module.exports = [
                 "type": "toggle",
                 "messageKey": "GhostDate",
                 "label": "Ghost trails for date (uses more power)",
-                "defaultValue": true
+                "defaultValue": false
             },
             {
                 "type": "toggle",
                 "messageKey": "HourlyVibrate",
                 "label": "Vibrate every hour",
-                "defaultValue": true
+                "defaultValue": false
             },
             {
                 "type": "toggle",
