@@ -21,9 +21,11 @@
 #endif
 
 #define BIG_DIGIT_WIDTH_PX 30
+#define BIG_DIGIT_SLIM_WIDTH_PX 6
 #define BIG_DIGIT_HEIGHT_PX 45
 #define BIG_DIGIT_NOISE_PX_COUNT 160 // ~15%
 #define SMALL_DIGIT_WIDTH_PX 12
+#define SMALL_DIGIT_SLIM_WIDTH_PX 3
 #define SMALL_DIGIT_HEIGHT_PX 18
 #define SMALL_DIGIT_NOISE_PX_COUNT 27 // ~15%
 
@@ -74,8 +76,6 @@
   (PBL_PLATFORM_TYPE_CURRENT == PlatformTypeEmery ? 5 : 0)
 #define HORIZONTAL_TRACK_WIDTH_PX                                              \
   (PBL_DISPLAY_WIDTH - (2 * EXTERNAL_ITEM_HORIZONTAL_PADDING_PX))
-#define SINGLE_WIDE_BIG_DIGIT_MOVEMENT_WIDTH_PX                                \
-  (HORIZONTAL_TRACK_WIDTH_PX - BIG_DIGIT_WIDTH_PX)
 #define DOUBLE_WIDE_BIG_DIGIT_MOVEMENT_WIDTH_PX                                \
   (HORIZONTAL_TRACK_WIDTH_PX - (BIG_DIGIT_WIDTH_PX * 2) -                      \
    INTERNAL_FONT_PADDING_PX)
@@ -272,6 +272,8 @@ static void render_hex_row(GContext *ctx, int value, int x, int y,
   bool is_special_case_day_of_week_render =
       row_type == DAY_OF_WEEK && !is_rendering_as_hexadecimal;
   const int char_w = use_small_font ? SMALL_DIGIT_WIDTH_PX : BIG_DIGIT_WIDTH_PX;
+  const int slim_char_w =
+      use_small_font ? SMALL_DIGIT_SLIM_WIDTH_PX : BIG_DIGIT_SLIM_WIDTH_PX;
   const bool is_double_wide =
       (is_rendering_as_hexadecimal
            ? value >= 16
@@ -279,6 +281,25 @@ static void render_hex_row(GContext *ctx, int value, int x, int y,
       is_special_case_day_of_week_render;
   const int total_block_w = (char_w * (is_double_wide ? 2 : 1)) +
                             (is_double_wide ? INTERNAL_FONT_PADDING_PX : 0);
+
+  // If we're not "double wide" but the row is sometimes double wide (which is
+  // true for everything *but* day of week (not-special case) and month of year
+  // (not-hex), then we actually want to push ourselves forward +1 character
+  // Otherwise, we don't seem to make enough "progress" until we get into the
+  // double-character items because our eyes visually measure from dist-to-edge
+  bool is_single_char_only_row =
+      (row_type == DAY_OF_WEEK && is_rendering_as_hexadecimal) ||
+      (row_type == MONTH_OF_YEAR && is_rendering_as_hexadecimal);
+  bool is_double_row_with_only_slim_first_digit =
+      row_type == HOUR_OF_DAY ||
+      (row_type == DAY_OF_MONTH && is_rendering_as_hexadecimal);
+  if (!is_double_wide && !is_single_char_only_row) {
+    VERBOSE_LOG("Adjusting single character in row_type=%d forward",
+                (int)row_type);
+    const int char_padding =
+        is_double_row_with_only_slim_first_digit ? slim_char_w : char_w;
+    x += (char_padding + INTERNAL_FONT_PADDING_PX);
+  }
 
   // First pass: the actual display value
   if (!is_special_case_day_of_week_render) {
@@ -352,17 +373,22 @@ static void layer_update_callback(Layer *me, GContext *ctx) {
   int y_offset = EXTERNAL_ITEM_VERTICAL_PADDING_PX + EXTRA_VERTICAL_PADDING_PX;
 
   // Draw hours in hex
-  int hour_value = hours;
-  if (!is_24_hour_style && hour_value > 11) {
-    hour_value -= 12;
+  int hour_display_value = hours;
+  if (!is_24_hour_style) {
+    if (hour_display_value > 11) {
+      VERBOSE_LOG("Removing 12 from hours (12h style)");
+      hour_display_value -= 12;
+    }
+    if (hour_display_value == 0) {
+      VERBOSE_LOG("Adjusting hours to 12 (12h style)");
+      hour_display_value = 12;
+    }
   }
   float hour_pct_across_screen = (float)hours / 23.0F;
-  int hour_x_position = EXTERNAL_ITEM_HORIZONTAL_PADDING_PX +
-                        (hour_pct_across_screen *
-                         (is_24_hour_style || !settings.HexMode
-                              ? DOUBLE_WIDE_BIG_DIGIT_MOVEMENT_WIDTH_PX
-                              : SINGLE_WIDE_BIG_DIGIT_MOVEMENT_WIDTH_PX));
-  render_hex_row(ctx, hour_value, hour_x_position, y_offset, false,
+  int hour_x_position =
+      EXTERNAL_ITEM_HORIZONTAL_PADDING_PX +
+      (hour_pct_across_screen * DOUBLE_WIDE_BIG_DIGIT_MOVEMENT_WIDTH_PX);
+  render_hex_row(ctx, hour_display_value, hour_x_position, y_offset, false,
                  HOUR_OF_DAY);
   y_offset += BIG_DIGIT_HEIGHT_PX + EXTERNAL_ITEM_VERTICAL_PADDING_PX;
 
@@ -435,10 +461,12 @@ static void layer_update_callback(Layer *me, GContext *ctx) {
       SECONDS_BATT_CONN_ROW_TOTAL_HEIGHT_PX + EXTERNAL_ITEM_VERTICAL_PADDING_PX;
 
   // Draw day of week (1 - 7)
-  float dow_pct_across_screen = (float)day_of_week / 7.0F;
+  float dow_pct_across_screen = (float)(day_of_week - 1) / 6.0F;
   int dow_x_position =
       EXTERNAL_ITEM_HORIZONTAL_PADDING_PX +
-      (dow_pct_across_screen * SINGLE_WIDE_SMALL_DIGIT_MOVEMENT_WIDTH_PX);
+      (dow_pct_across_screen *
+       (settings.HexMode ? SINGLE_WIDE_SMALL_DIGIT_MOVEMENT_WIDTH_PX
+                         : DOUBLE_WIDE_SMALL_DIGIT_MOVEMENT_WIDTH_PX));
   render_hex_row(ctx, day_of_week, dow_x_position, y_offset, true, DAY_OF_WEEK);
   y_offset += SMALL_DIGIT_HEIGHT_PX + EXTERNAL_ITEM_VERTICAL_PADDING_PX;
 
